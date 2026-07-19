@@ -451,6 +451,13 @@ color: var(--text);
 .empty-steps { margin: 0 0 10px; padding-left: 20px; display: flex; flex-direction: column; gap: 7px; font-size: 13.5px; line-height: 1.5; color: var(--text); }
 .empty-steps li::marker { color: #4f6fff; font-weight: 700; }
 .empty-tip { margin: 0 0 12px; font-size: 12.5px; color: var(--muted); line-height: 1.5; }
+.score-pick { cursor: pointer; }
+.sp-sub { font-size: 12px; color: var(--muted); }
+.sp-team { font-size: 14px; font-weight: 700; color: #4f6fff; margin: 2px 0 12px; line-height: 1.35; }
+.sp-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
+.sp-n { background: #fff; border: 1px solid #e1e9ff; border-radius: 10px; padding: 11px 0; font-size: 15px; font-weight: 600; color: var(--text); cursor: pointer; }
+.sp-n:hover { border-color: #4f6fff; }
+.sp-custom { grid-column: span 2; font-size: 12px; font-weight: 700; color: #3949ab; background: #eef2ff; }
 .pd-head { font-size: 12px; color: var(--muted); margin: -2px 0 10px; }
 .pd-card { background: #f8faff; border: 1px solid #e1e9ff; border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; }
 .pd-card h4 { margin: 0 0 8px; font-size: 11px; font-weight: 700; color: #6a769f; text-transform: uppercase; letter-spacing: 0.05em; }
@@ -1715,12 +1722,12 @@ return `<div class="match-tags">
 </div>`;
 }
 
-function pairSideHtml(team, ranks, scoreId, scoreLabel) {
+function pairSideHtml(team, ranks, scoreId, scoreLabel, scoreSub) {
 const inner = `<div class="pair-player">${playerLineLabel(team[0], ranks)}</div>
 <div class="pair-player">${playerLineLabel(team[1], ranks)}</div>
 <div class="pair-avg muted">${pairAvgLabel(team[0], team[1])}</div>`;
 if (!scoreId) return `<div class="pair">${inner}</div>`;
-return `<div class="pair has-score"><div class="pair-main">${inner}</div><input type="number" min="0" inputmode="numeric" id="${scoreId}" class="pair-score" placeholder="0" aria-label="Score for ${scoreLabel}" /></div>`;
+return `<div class="pair has-score"><div class="pair-main">${inner}</div><input type="number" min="0" inputmode="numeric" readonly id="${scoreId}" class="pair-score score-pick" placeholder="0" aria-label="Score for ${scoreLabel}" data-team="${String(scoreLabel).replace(/"/g, "&quot;")}" data-sub="${scoreSub || ""}" /></div>`;
 }
 
 function pairGridHtml(m, live) {
@@ -1729,10 +1736,11 @@ const idA = live ? `msa-${live.id}` : "";
 const idB = live ? `msb-${live.id}` : "";
 const labA = live ? formatPairNames(live.pairA) : "";
 const labB = live ? formatPairNames(live.pairB) : "";
+const sub = live && live.court ? `Court ${live.court}` : "";
 return `<div class="pair-grid">
-${pairSideHtml(m.a, ranks, idA, labA)}
+${pairSideHtml(m.a, ranks, idA, labA, sub)}
 <div class="pair-vs" aria-hidden="true">VS</div>
-${pairSideHtml(m.b, ranks, idB, labB)}
+${pairSideHtml(m.b, ranks, idB, labB, sub)}
 </div>
 ${matchTagsHtml(m)}`;
 }
@@ -1873,6 +1881,52 @@ function playerDetailHtml(d){
   h += "</div>";
   return h;
 }
+function applyScorePick(inputEl, val){
+  if (val === "" || val === null || val === undefined) return;
+  const n = Math.max(0, parseInt(val, 10) || 0);
+  inputEl.value = String(n);
+  inputEl.dispatchEvent(new Event("input", { bubbles: true }));
+  inputEl.dispatchEvent(new Event("change", { bubbles: true }));
+}
+function openScorePicker(inputEl){
+  const team = inputEl.getAttribute("data-team") || "";
+  const sub = inputEl.getAttribute("data-sub") || "";
+  let grid = "";
+  for (let i = 0; i <= 50; i++) grid += '<button type="button" class="sp-n" data-v="' + i + '">' + i + '</button>';
+  grid += '<button type="button" class="sp-n sp-custom">Custom</button>';
+  cmxShowModal({
+    title: "Select score",
+    bodyHTML: (sub ? '<div class="sp-sub">' + pdEsc(sub) + "</div>" : "")
+      + (team ? '<div class="sp-team">' + pdEsc(team) + "</div>" : "")
+      + '<div class="sp-grid">' + grid + "</div>",
+    buttons: [ { label: "Close", cls: "ghost", onClick: function(){} } ],
+    onOpen: function(box){
+      box.querySelectorAll(".sp-n").forEach(function(b){
+        b.onclick = function(){
+          if (b.classList.contains("sp-custom")) {
+            cmxCloseModal();
+            inputEl.removeAttribute("readonly");
+            inputEl.focus();
+            if (inputEl.select) inputEl.select();
+            const restore = function(){ inputEl.setAttribute("readonly", "readonly"); inputEl.removeEventListener("blur", restore); };
+            inputEl.addEventListener("blur", restore);
+            return;
+          }
+          applyScorePick(inputEl, b.dataset.v);
+          cmxCloseModal();
+        };
+      });
+    }
+  });
+}
+document.addEventListener("click", function(e){
+  const el = e.target;
+  if (el && el.classList && el.classList.contains("score-pick") && el.hasAttribute("readonly")) {
+    e.preventDefault();
+    openScorePicker(el);
+  }
+});
+
 function openPlayerDetail(pid){
   const d = computePlayerDetail(pid);
   if (!d) return;
@@ -2537,9 +2591,9 @@ ${hasScore ? `<button class="score-edit-btn" data-hid="${h.id}">Edit</button>` :
 </div>
 <div class="score-entry" id="se-${h.id}" style="${hasScore ? "display:none" : ""}">
 <span class="pair-label">${teamA}</span>
-<input type="number" min="0" id="sa-${h.id}" value="${h.scoreA ?? ""}" placeholder="0" />
+<input type="number" min="0" readonly id="sa-${h.id}" class="score-pick" value="${h.scoreA ?? ""}" placeholder="0" data-team="${String(teamA).replace(/"/g, "&quot;")}" data-sub="${h.court ? `Court ${h.court}` : ""}" />
 <span class="sep">–</span>
-<input type="number" min="0" id="sb-${h.id}" value="${h.scoreB ?? ""}" placeholder="0" />
+<input type="number" min="0" readonly id="sb-${h.id}" class="score-pick" value="${h.scoreB ?? ""}" placeholder="0" data-team="${String(teamB).replace(/"/g, "&quot;")}" data-sub="${h.court ? `Court ${h.court}` : ""}" />
 <span class="pair-label">${teamB}</span>
 <button class="score-save-btn" data-hid="${h.id}">Save</button>
 <button class="hist-del-btn" data-hid="${h.id}" title="Delete this match">Del</button>
