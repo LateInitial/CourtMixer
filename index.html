@@ -451,7 +451,17 @@ color: var(--text);
 .empty-steps { margin: 0 0 10px; padding-left: 20px; display: flex; flex-direction: column; gap: 7px; font-size: 13.5px; line-height: 1.5; color: var(--text); }
 .empty-steps li::marker { color: #4f6fff; font-weight: 700; }
 .empty-tip { margin: 0 0 12px; font-size: 12.5px; color: var(--muted); line-height: 1.5; }
-.score-pick { cursor: pointer; }
+.score-pick, .skill-input[readonly] { cursor: pointer; }
+.sk-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+.sk-n { background: #fff; border: 1px solid #e1e9ff; border-radius: 10px; padding: 11px 0; font-size: 14px; font-weight: 600; color: var(--text); cursor: pointer; }
+.sk-n:hover { border-color: #4f6fff; }
+.sk-n.sel { background: #eef2ff; border-color: #4f6ef7; color: #3949ab; font-weight: 700; }
+.sk-u { background: #fff7e6; border-color: #f5a623; color: #b47714; font-weight: 800; font-size: 15px; }
+.sk-u.sel { background: #ffeecc; border-color: #f5a623; color: #b47714; }
+.sk-custom { grid-column: span 2; font-size: 12px; font-weight: 700; color: #3949ab; background: #eef2ff; }
+.sk-note { margin-top: 12px; padding: 9px 11px; background: #f8faff; border: 1px solid #e1e9ff; border-radius: 9px; font-size: 12px; color: var(--muted); line-height: 1.5; }
+.sk-note b.u, .skill-legend b.u { color: #b47714; }
+.skill-legend { font-size: 12px; margin-top: 10px; }
 .sp-sub { font-size: 12px; color: var(--muted); }
 .sp-team { font-size: 14px; font-weight: 700; color: #4f6fff; margin: 2px 0 12px; line-height: 1.35; }
 .sp-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
@@ -805,7 +815,7 @@ button#editModeBtn.active-edit { background:#4f6fff; }
 <button type="button" class="gender-seg active" data-gender="M">M</button>
 <button type="button" class="gender-seg" data-gender="F">F</button>
 </div>
-<input id="skillInput" class="skill-input" type="number" min="1" max="10" step="0.1" placeholder="Skill" />
+<input id="skillInput" class="skill-input" type="number" min="1" max="10" step="0.1" readonly placeholder="Skill" />
 <button id="addPlayerBtn" class="primary">Add Player</button>
 <button id="resetBtn" class="secondary">Reset Data</button>
 <button id="saveDefaultBtn" class="secondary">Save as default</button>
@@ -825,6 +835,7 @@ button#editModeBtn.active-edit { background:#4f6fff; }
 <div id="playersTable"></div>
 </div>
 </div>
+<div class="muted skill-legend"><b class="u">U</b> = Unrated — matchmaking treats them as 3.0.</div>
 </div>
 <div class="card" id="playersEmpty" style="display:none;">
 <h3 class="empty-title">Welcome — let’s get you playing</h3>
@@ -1894,6 +1905,50 @@ function applyScorePick(inputEl, val){
   inputEl.dispatchEvent(new Event("input", { bubbles: true }));
   inputEl.dispatchEvent(new Event("change", { bubbles: true }));
 }
+function openSkillPicker(inputEl){
+  const nameEl = document.getElementById("nameInput");
+  const editing = editingId ? byId(editingId) : null;
+  const who = editing ? editing.name : (((nameEl && nameEl.value.trim()) || "New player"));
+  const cur = String(inputEl.value == null ? "" : inputEl.value).trim();
+  let grid = '<button type="button" class="sk-n sk-u' + (cur === "" ? " sel" : "") + '" data-v="">U</button>';
+  for (let i = 2; i <= 20; i++) {
+    const v = (i / 2).toFixed(1);
+    const sel = (cur !== "" && Number(cur) === Number(v)) ? " sel" : "";
+    grid += '<button type="button" class="sk-n' + sel + '" data-v="' + v + '">' + v + "</button>";
+  }
+  grid += '<button type="button" class="sk-n sk-custom">Custom</button>';
+  cmxShowModal({
+    title: "Select skill",
+    bodyHTML: '<div class="sp-team">' + pdEsc(who) + "</div>"
+      + '<div class="sk-grid">' + grid + "</div>"
+      + '<div class="sk-note"><b class="u">U</b> = Unrated. Matchmaking treats an unrated player as <b>3.0</b>.</div>',
+    buttons: [ { label: "Close", cls: "ghost", onClick: function(){} } ],
+    onOpen: function(box){
+      box.querySelectorAll(".sk-n").forEach(function(b){
+        b.onclick = function(){
+          if (b.classList.contains("sk-custom")) {
+            cmxCloseModal();
+            inputEl.removeAttribute("readonly");
+            inputEl.focus();
+            if (inputEl.select) inputEl.select();
+            const restore = function(){ inputEl.setAttribute("readonly", "readonly"); inputEl.removeEventListener("blur", restore); };
+            inputEl.addEventListener("blur", restore);
+            return;
+          }
+          inputEl.value = b.dataset.v;
+          inputEl.dispatchEvent(new Event("input", { bubbles: true }));
+          inputEl.dispatchEvent(new Event("change", { bubbles: true }));
+          cmxCloseModal();
+        };
+      });
+    }
+  });
+}
+document.addEventListener("click", function(e){
+  const el = e.target;
+  if (el && el.id === "skillInput" && el.hasAttribute("readonly")) { e.preventDefault(); openSkillPicker(el); }
+});
+
 function openScorePicker(inputEl){
   const team = inputEl.getAttribute("data-team") || "";
   const sub = inputEl.getAttribute("data-sub") || "";

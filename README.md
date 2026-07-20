@@ -6,7 +6,7 @@ A simple, self-contained matchmaking app for social **court sports** — badmint
 
 ## Features
 
-- **Players** — roster with gender (M/F) and an *optional* skill rating (1–10); add, edit, sort, and a dedicated Edit mode. Leave skill blank and the player shows as **U** (unrated) — they're treated as 3.0 when balancing teams.
+- **Players** — roster with gender (M/F) and an *optional* skill rating; tap the skill box and pick **U** or 1.0–10.0 in half steps (or *Custom* for something like 5.4). Leave it as **U** (unrated) and the player is treated as 3.0 when balancing teams. Add, edit, sort, and a dedicated Edit mode.
 - **Player details** — tap any name in the Leaderboard or Match Stats for their games played, win rate, point difference, win/loss/draw record, points scored and conceded, MD/WD/XD split, and every match they played.
 - **Priority & Skip** — tap to apply for the next game only, long-press to lock until you clear it.
 - **Smart matchmaking** (Americano & Mexicano formats):
