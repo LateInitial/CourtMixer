@@ -829,7 +829,7 @@ button#editModeBtn.active-edit { background:#4f6fff; }
 <div class="card" id="playersEmpty" style="display:none;">
 <h3 class="empty-title">Welcome — let’s get you playing</h3>
 <ol class="empty-steps">
-<li><b>Add your players</b> above: a name, M or F, and a skill rating from 1 to 10.</li>
+<li><b>Add your players</b> above: a name, M or F, and a skill rating from 1 to 10. Skill is optional — leave it blank and they show as <b>U</b> (unrated).</li>
 <li><b>Go to Match</b>, pick the format and how many courts, then tap <i>Generate</i>.</li>
 <li><b>Tap Confirm start</b>, play the game, then type each team’s score and tap <i>Finish &amp; save score</i>.</li>
 <li><b>Open the Leaderboard</b> — tap any name for that player’s stats, and share the results as an image or an interactive file.</li>
@@ -1012,6 +1012,12 @@ const defaultPlayers = [
 { id: crypto.randomUUID(), name: "Danny", gender: "M", skill: 3.0, matches: 0, wins: 0, points: 0, priority: false, skip: false }
 ];
 
+const UNRATED_SKILL = 3.0;
+function isUnrated(p){ const s = p && p.skill; return s === null || s === undefined || s === ""; }
+function skillOf(p){ return isUnrated(p) ? UNRATED_SKILL : Number(p.skill); }
+function fmtSkill(p){ return isUnrated(p) ? "U" : Number(p.skill).toFixed(1); }
+function normSkillInput(v){ const t = String(v == null ? "" : v).trim(); if (t === "") return null; const n = Number(t); return Number.isFinite(n) ? n : NaN; }
+function normSkillData(v){ if (v === null || v === undefined || v === "") return null; const n = Number(v); return Number.isFinite(n) ? n : null; }
 let players = JSON.parse(localStorage.getItem("courtmixer_players") || "null") || [];
 // Migrate: ensure wins field exists
 players.forEach(p => { if (p.wins === undefined) p.wins = 0; if (p.points === undefined) p.points = 0; if (p.gender === undefined) p.gender = "M"; if (p.priorityLock === undefined) p.priorityLock = false; if (p.skipLock === undefined) p.skipLock = false; if (p.pointsDiff === undefined) p.pointsDiff = 0; });
@@ -1181,7 +1187,7 @@ function comparePlayerRank(a, b) {
 if (b.points !== a.points) return b.points - a.points;
 if (b.wins !== a.wins) return b.wins - a.wins;
 if (a.matches !== b.matches) return a.matches - b.matches;
-return b.skill - a.skill;
+return skillOf(b) - skillOf(a);
 }
 
 function rankActivePlayers(active) {
@@ -1207,7 +1213,7 @@ function playerLineLabel(p, rankByPlayerId) {
 const rank = rankByPlayerId && rankByPlayerId[p.id];
 const prefix = rank ? `#${rank} ` : "";
 const g = (p.gender === "F") ? "F" : "M";
-const stat = matchmakingMode === "mexicano" ? `${p.points} pts` : p.skill.toFixed(1);
+const stat = matchmakingMode === "mexicano" ? `${p.points} pts` : fmtSkill(p);
 return `${prefix}${p.name} · ${g} · ${stat} · ${p.matches} GP`;
 }
 
@@ -1216,7 +1222,7 @@ if (matchmakingMode === "mexicano") {
 const avg = (a.points + b.points) / 2;
 return `Avg ${avg.toFixed(0)} pts`;
 }
-const avg = (a.skill + b.skill) / 2;
+const avg = (skillOf(a) + skillOf(b)) / 2;
 return `Avg ${avg.toFixed(2)}`;
 }
 
@@ -1369,7 +1375,7 @@ return pen;
 const ANTI_STACK_PENALTY = 60000;
 function antiStackPenalty(a, b) {
 const usePts = matchmakingMode === "mexicano";
-const val = (p) => usePts ? p.points : p.skill;
+const val = (p) => usePts ? p.points : skillOf(p);
 const four = [...a, ...b].slice().sort((x, y) => val(x) - val(y));
 if (val(four[1]) === val(four[2])) return 0; // no clear low/high boundary
 const lowSet = new Set([four[0].id, four[1].id]);
@@ -1395,7 +1401,7 @@ if (!h.pairAIds || h.pairAIds.length < 2 || !h.pairBIds || h.pairBIds.length < 2
 [h.pairAIds, h.pairBIds].forEach(team => {
 const p0 = byId(team[0]), p1 = byId(team[1]);
 let isLH = false, hiId = null;
-if (p0 && p1) { isLH = Math.abs(p0.skill - p1.skill) > LH_GAP; hiId = p0.skill >= p1.skill ? p0.id : p1.id; }
+if (p0 && p1) { isLH = Math.abs(skillOf(p0) - skillOf(p1)) > LH_GAP; hiId = skillOf(p0) >= skillOf(p1) ? p0.id : p1.id; }
 team.forEach(id => { (games[id] = games[id] || []).push(isLH && id === hiId); });
 });
 });
@@ -1414,10 +1420,10 @@ function lowHighPenalty(a, b, lhInfo) {
 const T = 2, LH_GAP = 3, W_INTRA = 300;
 let pen = 0;
 [a, b].forEach(team => {
-const gap = Math.abs(team[0].skill - team[1].skill);
+const gap = Math.abs(skillOf(team[0]) - skillOf(team[1]));
 pen += Math.max(0, gap - T) * W_INTRA;
 if (gap > LH_GAP) {
-const hi = team[0].skill >= team[1].skill ? team[0] : team[1];
+const hi = skillOf(team[0]) >= skillOf(team[1]) ? team[0] : team[1];
 const k = lhInfo.gamesSince(hi.id);
 if (k <= 1) pen += 3000;
 else if (k === 2) pen += 800;
@@ -1527,9 +1533,9 @@ const a = h.pairAIds.map(id => byId(id)).filter(Boolean);
 const b = h.pairBIds.map(id => byId(id)).filter(Boolean);
 if (a.length !== 2 || b.length !== 2) return null;
 const isMex = matchmakingMode === "mexicano";
-const avgA = isMex ? (a[0].points + a[1].points) / 2 : (a[0].skill + a[1].skill) / 2;
-const avgB = isMex ? (b[0].points + b[1].points) / 2 : (b[0].skill + b[1].skill) / 2;
-const allSkills = [...a, ...b].map(p => p.skill);
+const avgA = isMex ? (a[0].points + a[1].points) / 2 : (skillOf(a[0]) + skillOf(a[1])) / 2;
+const avgB = isMex ? (b[0].points + b[1].points) / 2 : (skillOf(b[0]) + skillOf(b[1])) / 2;
+const allSkills = [...a, ...b].map(p => skillOf(p));
 const allPts = [...a, ...b].map(p => p.points);
 const rankByPlayerId = {};
 getLeaderboardRankMap().forEach((rank, id) => { rankByPlayerId[id] = rank; });
@@ -1616,12 +1622,12 @@ const minGames = Math.min(...activeProjected.map(p => p.matches));
 const fairnessGap = maxGames - minGames;
 if (fairnessGap > maxGap) continue;
 const gpSpread = Math.max(...everyone.map(p => p.matches)) - Math.min(...everyone.map(p => p.matches));
-const allSkills = everyone.map(p => p.skill);
+const allSkills = everyone.map(p => skillOf(p));
 const spread = Math.max(...allSkills) - Math.min(...allSkills);
 const allPts = everyone.map(p => p.points);
 const ptsSpread = Math.max(...allPts) - Math.min(...allPts);
-const avgA = isMex ? (a[0].points + a[1].points) / 2 : (a[0].skill + a[1].skill) / 2;
-const avgB = isMex ? (b[0].points + b[1].points) / 2 : (b[0].skill + b[1].skill) / 2;
+const avgA = isMex ? (a[0].points + a[1].points) / 2 : (skillOf(a[0]) + skillOf(a[1])) / 2;
+const avgB = isMex ? (b[0].points + b[1].points) / 2 : (skillOf(b[0]) + skillOf(b[1])) / 2;
 const pairDelta = Math.abs(avgA - avgB);
 const key = pairKey(a.map(p => p.id), b.map(p => p.id));
 const repeated = seenPairings.has(key) ? 1 : 0;
@@ -2002,8 +2008,8 @@ const key = pairKey([ids[0], ids[1]], [ids[2], ids[3]]);
 const repeated = seenPairings.has(key);
 seenPairings.add(key);
 const isMex = matchmakingMode === "mexicano";
-const avgA = isMex ? (a[0].points + a[1].points) / 2 : (a[0].skill + a[1].skill) / 2;
-const avgB = isMex ? (b[0].points + b[1].points) / 2 : (b[0].skill + b[1].skill) / 2;
+const avgA = isMex ? (a[0].points + a[1].points) / 2 : (skillOf(a[0]) + skillOf(a[1])) / 2;
+const avgB = isMex ? (b[0].points + b[1].points) / 2 : (skillOf(b[0]) + skillOf(b[1])) / 2;
 const category = (courtMode[courtNum] === "MD" || courtMode[courtNum] === "WD" || courtMode[courtNum] === "XD") ? courtMode[courtNum] : inferCategoryFromPlayers([...a, ...b]);
 history.push({
 id: crypto.randomUUID(),
@@ -2104,10 +2110,10 @@ const a = [byId(pos[0]), byId(pos[1])], b = [byId(pos[2]), byId(pos[3])];
 if (a.some(x => !x) || b.some(x => !x)) continue;
 if (mode === "XD" && !(gOf(a[0]) !== gOf(a[1]) && gOf(b[0]) !== gOf(b[1]))) continue;
 const everyone = [...a, ...b];
-const avgA = isMex ? (a[0].points + a[1].points) / 2 : (a[0].skill + a[1].skill) / 2;
-const avgB = isMex ? (b[0].points + b[1].points) / 2 : (b[0].skill + b[1].skill) / 2;
+const avgA = isMex ? (a[0].points + a[1].points) / 2 : (skillOf(a[0]) + skillOf(a[1])) / 2;
+const avgB = isMex ? (b[0].points + b[1].points) / 2 : (skillOf(b[0]) + skillOf(b[1])) / 2;
 const pairDelta = Math.abs(avgA - avgB);
-const sk = everyone.map(p => p.skill); const spread = Math.max(...sk) - Math.min(...sk);
+const sk = everyone.map(p => skillOf(p)); const spread = Math.max(...sk) - Math.min(...sk);
 const pts = everyone.map(p => p.points); const ptsSpread = Math.max(...pts) - Math.min(...pts);
 const fillGP = combo.reduce((sum, p) => sum + p.matches, 0);
 const key = pairKey([pos[0], pos[1]], [pos[2], pos[3]]);
@@ -2131,7 +2137,7 @@ const addBtn = document.getElementById("addPlayerBtn");
 if (id) {
 const p = byId(id);
 nameInput.value = p.name;
-skillInput.value = p.skill;
+skillInput.value = isUnrated(p) ? "" : p.skill;
 setGenderUI(p.gender || "M");
 nameInput.focus();
 toolbar.classList.add("editing-mode");
@@ -2158,7 +2164,7 @@ const copy = [...players];
 copy.sort((a, b) => {
 if (col === "name") { const av = a.name.toLowerCase(), bv = b.name.toLowerCase(); return av < bv ? -dir : av > bv ? dir : 0; }
 if (col === "gender") { const av = (a.gender || ""), bv = (b.gender || ""); return av < bv ? -dir : av > bv ? dir : 0; }
-if (col === "skill") return (a.skill - b.skill) * dir;
+if (col === "skill") return (skillOf(a) - skillOf(b)) * dir;
 if (col === "matches") return (a.matches - b.matches) * dir;
 return 0;
 });
@@ -2280,9 +2286,9 @@ const editHTML = isEditing
 ? `<button class="small save-btn" data-role="save" data-id="${p.id}" title="Save changes">Save</button>`
 : `<button class="small edit-btn" data-role="edit" data-id="${p.id}" title="Edit player">Edit</button>`;
 const delHTML = `<button class="small danger" data-role="delete" data-id="${p.id}" title="Delete player">Del</button>`;
-row.innerHTML = `<div>${idx + 1}</div><div class="name">${p.name}</div>${genderHtml}<div class="skill col-skill">${p.skill.toFixed(1)}</div><div class="col-actions">${editHTML}</div><div class="col-del">${delHTML}</div>`;
+row.innerHTML = `<div>${idx + 1}</div><div class="name">${p.name}</div>${genderHtml}<div class="skill col-skill">${fmtSkill(p)}</div><div class="col-actions">${editHTML}</div><div class="col-del">${delHTML}</div>`;
 } else {
-row.innerHTML = `<div>${idx + 1}</div><div class="name">${p.name}</div>${genderHtml}<div class="skill col-skill">${p.skill.toFixed(1)}</div><div class="col-games">${p.matches}</div>${stateBoxHtml(p,"priority")}${stateBoxHtml(p,"skip")}`;
+row.innerHTML = `<div>${idx + 1}</div><div class="name">${p.name}</div>${genderHtml}<div class="skill col-skill">${fmtSkill(p)}</div><div class="col-games">${p.matches}</div>${stateBoxHtml(p,"priority")}${stateBoxHtml(p,"skip")}`;
 }
 table.appendChild(row);
 });
@@ -2327,9 +2333,9 @@ if (!editingId) return;
 const nameInput = document.getElementById("nameInput");
 const skillInput = document.getElementById("skillInput");
 const name = nameInput.value.trim();
-const skill = Number(skillInput.value);
+const skill = normSkillInput(skillInput.value);
 if (!name) return alert("Enter player name.");
-if (Number.isNaN(skill) || skill < 1 || skill > 10) return alert("Skill must be 1.0 to 10.0");
+if (skill !== null && (!Number.isFinite(skill) || skill < 1 || skill > 10)) return alert("Skill must be 1.0 to 10.0 \u2014 or leave it blank to add them as Unrated.");
 const p = byId(editingId);
 if (p) {
 p.name = name;
@@ -2342,7 +2348,7 @@ renderStats();
 
 function optLabel(p, rankMap) {
 const g = (p.gender === "F") ? "F" : "M";
-const stat = matchmakingMode === "mexicano" ? `${p.points}pts` : p.skill.toFixed(1);
+const stat = matchmakingMode === "mexicano" ? `${p.points}pts` : fmtSkill(p);
 const r = rankMap && rankMap.get(p.id);
 return `${r ? "#" + r + " " : ""}${p.name} \u00b7 ${g} \u00b7 ${stat} \u00b7 ${p.matches} GP`;
 }
@@ -2381,9 +2387,9 @@ const a = [byId(ids[0]), byId(ids[1])], b = [byId(ids[2]), byId(ids[3])];
 if (a.some(x => !x) || b.some(x => !x)) return "";
 const isMex = matchmakingMode === "mexicano";
 const everyone = [...a, ...b];
-const avgA = isMex ? (a[0].points + a[1].points) / 2 : (a[0].skill + a[1].skill) / 2;
-const avgB = isMex ? (b[0].points + b[1].points) / 2 : (b[0].skill + b[1].skill) / 2;
-const allSkills = everyone.map(p => p.skill), allPts = everyone.map(p => p.points);
+const avgA = isMex ? (a[0].points + a[1].points) / 2 : (skillOf(a[0]) + skillOf(a[1])) / 2;
+const avgB = isMex ? (b[0].points + b[1].points) / 2 : (skillOf(b[0]) + skillOf(b[1])) / 2;
+const allSkills = everyone.map(p => skillOf(p)), allPts = everyone.map(p => p.points);
 const gpVals = everyone.map(p => p.matches);
 const key = pairKey([ids[0], ids[1]], [ids[2], ids[3]]);
 const m = { a, b, avgA, avgB, spread: Math.max(...allSkills) - Math.min(...allSkills), ptsSpread: Math.max(...allPts) - Math.min(...allPts), pairDelta: Math.abs(avgA - avgB), fairnessGap: Math.max(...gpVals) - Math.min(...gpVals), repeated: seenPairings.has(key) };
@@ -2707,7 +2713,7 @@ const pdTop = uniqueTop(players.filter(p => p.matches >= 2 && (p.pointsDiff || 0
 if (pdTop) pushFact("POINT_DIFF_LEADER", [pdTop.id], "📊", `<strong>${pdTop.name}</strong> owns the scoresheet with a commanding <strong>+${pdTop.pointsDiff} point difference</strong> — outscoring the room.`, 60 + Math.min(pdTop.pointsDiff, 40));
 
 // #2 Upset of the day — unique biggest skill gap
-const upTop = uniqueTop(scored.map(h => { const a = h.pairAIds.map(byId), b = h.pairBIds.map(byId); if (a.some(x => !x) || b.some(x => !x)) return null; const avgA = (a[0].skill + a[1].skill) / 2, avgB = (b[0].skill + b[1].skill) / 2, aWon = h.scoreA > h.scoreB; return { h, gap: aWon ? avgB - avgA : avgA - avgB, winIds: aWon ? h.pairAIds : h.pairBIds }; }).filter(o => o && o.gap >= 1.5), o => o.gap);
+const upTop = uniqueTop(scored.map(h => { const a = h.pairAIds.map(byId), b = h.pairBIds.map(byId); if (a.some(x => !x) || b.some(x => !x)) return null; const avgA = (skillOf(a[0]) + skillOf(a[1])) / 2, avgB = (skillOf(b[0]) + skillOf(b[1])) / 2, aWon = h.scoreA > h.scoreB; return { h, gap: aWon ? avgB - avgA : avgA - avgB, winIds: aWon ? h.pairAIds : h.pairBIds }; }).filter(o => o && o.gap >= 1.5), o => o.gap);
 if (upTop) { const h = upTop.h, names = upTop.winIds.map(id => byId(id)?.name).filter(Boolean); pushFact("UPSET", upTop.winIds, "🐉", `<strong>${names.join(" & ")}</strong> pulled off the upset of the day, toppling a much stronger pair <strong>${Math.max(h.scoreA, h.scoreB)}–${Math.min(h.scoreA, h.scoreB)}</strong>. Giant-killers!`, 65 + upTop.gap * 8); }
 
 // #4 Highest-scoring match — unique highest total
@@ -3031,9 +3037,9 @@ return;
 const nameInput = document.getElementById("nameInput");
 const skillInput = document.getElementById("skillInput");
 const name = nameInput.value.trim();
-const skill = Number(skillInput.value);
+const skill = normSkillInput(skillInput.value);
 if (!name) return alert("Enter player name.");
-if (Number.isNaN(skill) || skill < 1 || skill > 10) return alert("Skill must be 1.0 to 10.0");
+if (skill !== null && (!Number.isFinite(skill) || skill < 1 || skill > 10)) return alert("Skill must be 1.0 to 10.0 \u2014 or leave it blank to add them as Unrated.");
 players.push({ id: crypto.randomUUID(), name, gender: selectedGender, skill, matches: 0, wins: 0, points: 0, priority: false, skip: false, priorityLock: false, skipLock: false, pointsDiff: 0 });
 nameInput.value = "";
 skillInput.value = "";
@@ -3165,7 +3171,7 @@ renderPlayers();
 /* ===== CourtMixer share codes + modal (index56) ===== */
 function buildRosterPayload(){
   return { app:"CourtMixer", type:"roster", version:1, exportedAt:new Date().toISOString(),
-    players: players.map(function(p){ return { name:String(p.name||""), gender:(p.gender==="F"?"F":"M"), skill:Number(p.skill)||1 }; }) };
+    players: players.map(function(p){ return { name:String(p.name||""), gender:(p.gender==="F"?"F":"M"), skill: normSkillData(p.skill) }; }) };
 }
 function buildSessionPayload(){
   var rosterDefault = (customDefaults && customDefaults.length) ? customDefaults : players.map(function(p){ return { name:p.name, gender:(p.gender==="F"?"F":"M"), skill:p.skill }; });
@@ -3183,7 +3189,7 @@ function applyRosterImport(data){
   if(!data || data.app!=="CourtMixer" || !Array.isArray(data.players) || !data.players.length){ alert("No players found in that roster code/file."); return false; }
   if(history && history.length){ if(!confirm("Import this roster?\n\nThis replaces your current players and CLEARS all match history and scores on this device. This cannot be undone.")) return false; }
   else { if(!confirm("Import this roster?\n\nThis replaces your current players.")) return false; }
-  players = data.players.map(function(p){ return { id:crypto.randomUUID(), name:String(p.name||""), gender:p.gender==="F"?"F":"M", skill:Number(p.skill)||1, matches:0, wins:0, points:0, priority:false, skip:false, priorityLock:false, skipLock:false, pointsDiff:0 }; });
+  players = data.players.map(function(p){ return { id:crypto.randomUUID(), name:String(p.name||""), gender:p.gender==="F"?"F":"M", skill: normSkillData(p.skill), matches:0, wins:0, points:0, priority:false, skip:false, priorityLock:false, skipLock:false, pointsDiff:0 }; });
   history = [];
   seenPairings.clear();
   courtSlots = { 1:[null,null,null,null], 2:[null,null,null,null], 3:[null,null,null,null], 4:[null,null,null,null] };
@@ -3314,14 +3320,14 @@ try { data = JSON.parse(e.target.result); } catch (err) { alert("That file isn't
 if (!data || data.app !== "CourtMixer" || !Array.isArray(data.players)) { alert("That file isn't a valid CourtMixer backup."); return; }
 if (data.type === "roster") { alert("That's a roster file. Use Import Roster on the Players tab."); return; }
 if (!confirm("Import this backup?\n\nIt replaces the players, match history and settings currently on this device.")) return;
-players = data.players.map(p => ({ id: p.id || crypto.randomUUID(), name: String(p.name || ""), gender: p.gender === "F" ? "F" : "M", skill: Number(p.skill) || 1, matches: Number(p.matches) || 0, wins: Number(p.wins) || 0, points: Number(p.points) || 0, priority: false, skip: false, priorityLock: false, skipLock: false, pointsDiff: Number(p.pointsDiff) || 0 }));
+players = data.players.map(p => ({ id: p.id || crypto.randomUUID(), name: String(p.name || ""), gender: p.gender === "F" ? "F" : "M", skill: normSkillData(p.skill), matches: Number(p.matches) || 0, wins: Number(p.wins) || 0, points: Number(p.points) || 0, priority: false, skip: false, priorityLock: false, skipLock: false, pointsDiff: Number(p.pointsDiff) || 0 }));
 history = Array.isArray(data.history) ? data.history : [];
 history.forEach(h => { if (h.closed === undefined) h.closed = false; });
 seenPairings.clear(); (Array.isArray(data.seen) ? data.seen : []).forEach(k => seenPairings.add(k));
 courtCount = (data.courtCount >= 1 && data.courtCount <= MAX_COURTS) ? data.courtCount : 1;
 scoringStyle = ["points", "adjpts", "league", "ptspergp"].includes(data.scoringStyle) ? data.scoringStyle : "points";
 matchmakingMode = data.matchmakingMode === "mexicano" ? "mexicano" : "americano";
-customDefaults = Array.isArray(data.customDefaults) ? data.customDefaults.map(p => ({ name: p.name, gender: p.gender === "F" ? "F" : "M", skill: Number(p.skill) || 1 })) : null;
+customDefaults = Array.isArray(data.customDefaults) ? data.customDefaults.map(p => ({ name: p.name, gender: p.gender === "F" ? "F" : "M", skill: normSkillData(p.skill) })) : null;
 sessionName = typeof data.sessionName === "string" ? data.sessionName : "";
 sessionDate = /^\d{4}-\d{2}-\d{2}$/.test(data.sessionDate) ? data.sessionDate : todayISO();
 courtSlots = { 1: [null, null, null, null], 2: [null, null, null, null], 3: [null, null, null, null], 4: [null, null, null, null] };
