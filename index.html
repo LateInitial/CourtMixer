@@ -761,7 +761,7 @@ button#editModeBtn.active-edit { background:#4f6fff; }
 .subview { display:none; }
 .subview.active { display:block; }
 .table-inner.stats-mode .header-row, .table-inner.stats-mode .row { grid-template-columns: 24px minmax(70px,1fr) 32px 34px 38px 38px 38px; }
-.state-box { width:22px; height:22px; border-radius:6px; border:1.5px solid #c2d0ff; background:#fff; cursor:pointer; padding:0; display:inline-flex; align-items:center; justify-content:center; font-size:13px; line-height:1; color:#6f7ca3; user-select:none; touch-action:none; }
+.state-box { width:22px; height:22px; border-radius:6px; border:1.5px solid #c2d0ff; background:#fff; cursor:pointer; padding:0; display:inline-flex; align-items:center; justify-content:center; font-size:13px; line-height:1; color:#6f7ca3; user-select:none; -webkit-user-select:none; -webkit-touch-callout:none; touch-action:manipulation; }
 .state-box.on-priority { border-color:var(--ok-border); background:#e3f6ec; color:#1f8a52; }
 .state-box.on-skip { border-color:var(--skip-border); background:#fde7e9; color:#c0414a; }
 .state-box.locked { box-shadow:0 0 0 2px rgba(31,138,82,0.16); }
@@ -2296,14 +2296,32 @@ function bindStateBoxes() {
 document.querySelectorAll('.state-box').forEach(box => {
 const id = box.dataset.id, kind = box.dataset.role;
 let held = false, timer = null;
-const start = (e) => { e.preventDefault(); held = false; timer = setTimeout(() => { held = true; timer = null; const p = byId(id); if (p) setToggleState(p, kind, "hold"); }, 450); };
-const end = () => { if (timer) { clearTimeout(timer); timer = null; if (!held) { const p = byId(id); if (p) setToggleState(p, kind, "tap"); } } };
-const cancel = () => { if (timer) { clearTimeout(timer); timer = null; } };
+let active = false, sx = 0, sy = 0;
+const clearTimer = () => { if (timer) { clearTimeout(timer); timer = null; } };
+const start = (e) => {
+active = true; held = false; sx = e.clientX; sy = e.clientY;
+clearTimer();
+timer = setTimeout(() => {
+timer = null; held = true;
+const p = byId(id);
+if (p) { setToggleState(p, kind, "hold"); if (navigator.vibrate) navigator.vibrate(15); }
+}, 450);
+};
+const move = (e) => {
+if (!active) return;
+if (Math.abs(e.clientX - sx) > 10 || Math.abs(e.clientY - sy) > 10) { clearTimer(); active = false; }
+};
+const end = () => {
+if (!active) { clearTimer(); return; }
+active = false;
+if (timer) { clearTimer(); if (!held) { const p = byId(id); if (p) setToggleState(p, kind, "tap"); } }
+};
+const cancel = () => { clearTimer(); active = false; };
 box.addEventListener("pointerdown", start);
+box.addEventListener("pointermove", move);
 box.addEventListener("pointerup", end);
-box.addEventListener("pointerleave", cancel);
 box.addEventListener("pointercancel", cancel);
-box.addEventListener("contextmenu", (e) => { e.preventDefault(); const p = byId(id); if (p) setToggleState(p, kind, "hold"); });
+box.addEventListener("contextmenu", (e) => e.preventDefault());
 });
 }
 
