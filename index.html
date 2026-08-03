@@ -745,10 +745,16 @@ button#editModeBtn.active-edit { background:#4f6fff; }
 .slot-select.slot-empty { color:#8a94b0; border-style:dashed; background:#f8f9fc; }
 .slot-select.slot-locked { background:#e6f8ee; border-color:var(--ok-border); border-style:solid; }
 .pair-grid.editable .pair { gap:3px; }
-.ps-toast { position:fixed; left:50%; bottom:max(22px, env(safe-area-inset-bottom)); transform:translateX(-50%) translateY(12px); width:min(80vw, 600px); box-sizing:border-box; display:flex; align-items:center; gap:12px; background:#fff; color:var(--text); border:1px solid #c8d5fb; border-left:4px solid var(--accent); border-radius:12px; padding:12px 16px; font-size:13.5px; line-height:1.45; box-shadow:0 8px 24px rgba(49,79,157,0.22); opacity:0; pointer-events:none; z-index:999; transition:opacity 0.3s ease, transform 0.3s ease; }
+.ps-toast { position:fixed; left:50%; bottom:max(22px, env(safe-area-inset-bottom)); transform:translateX(-50%) translateY(12px); width:min(80vw, 600px); box-sizing:border-box; display:flex; align-items:center; gap:12px; background:#fff; color:var(--text); border:1px solid #c8d5fb; border-left:4px solid var(--accent); border-radius:12px; padding:12px 16px; font-size:13.5px; line-height:1.45; box-shadow:0 8px 24px rgba(49,79,157,0.22); opacity:0; pointer-events:none; z-index:999; transition:opacity 0.3s ease, transform 0.3s ease; overflow:hidden; touch-action:none; cursor:grab; }
 .ps-toast.show { opacity:1; transform:translateX(-50%) translateY(0); pointer-events:auto; }
 .ps-toast .toast-msg { flex:1 1 auto; min-width:0; }
 .toast-undo { flex:0 0 auto; background:var(--accent); padding:7px 14px; font-size:12.5px; border-radius:8px; }
+.toast-x { flex:0 0 auto; background:transparent; color:#9aa6c8; padding:2px 2px 4px; margin:-2px -4px -2px 0; font-size:20px; line-height:1; font-weight:700; border-radius:6px; }
+.toast-x:hover { color:#5f6d94; }
+/* Counts the auto-dismiss down so the timing reads as deliberate rather than random. */
+.toast-bar { position:absolute; left:0; right:0; bottom:0; height:3px; background:var(--accent); opacity:0.45; transform-origin:left center; animation-name:toastBar; animation-timing-function:linear; animation-fill-mode:forwards; }
+@keyframes toastBar { from { transform:scaleX(1); } to { transform:scaleX(0); } }
+@media (prefers-reduced-motion: reduce) { .toast-bar { animation:none; opacity:0.25; } }
 /* Session name (Leaderboard) */
 .session-header { margin-bottom: 12px; }
 .share-row { margin-top: 14px; }
@@ -970,7 +976,7 @@ button#editModeBtn.active-edit { background:#4f6fff; }
 <script>/*! lz-string MIT */ var LZString=function(){var r=String.fromCharCode,o="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=",n="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+-$",e={};function t(r,o){if(!e[r]){e[r]={};for(var n=0;n<r.length;n++)e[r][r.charAt(n)]=n}return e[r][o]}var i={compressToBase64:function(r){if(null==r)return"";var n=i._compress(r,6,function(r){return o.charAt(r)});switch(n.length%4){default:case 0:return n;case 1:return n+"===";case 2:return n+"==";case 3:return n+"="}},decompressFromBase64:function(r){return null==r?"":""==r?null:i._decompress(r.length,32,function(n){return t(o,r.charAt(n))})},compressToUTF16:function(o){return null==o?"":i._compress(o,15,function(o){return r(o+32)})+" "},decompressFromUTF16:function(r){return null==r?"":""==r?null:i._decompress(r.length,16384,function(o){return r.charCodeAt(o)-32})},compressToUint8Array:function(r){for(var o=i.compress(r),n=new Uint8Array(2*o.length),e=0,t=o.length;e<t;e++){var s=o.charCodeAt(e);n[2*e]=s>>>8,n[2*e+1]=s%256}return n},decompressFromUint8Array:function(o){if(null==o)return i.decompress(o);for(var n=new Array(o.length/2),e=0,t=n.length;e<t;e++)n[e]=256*o[2*e]+o[2*e+1];var s=[];return n.forEach(function(o){s.push(r(o))}),i.decompress(s.join(""))},compressToEncodedURIComponent:function(r){return null==r?"":i._compress(r,6,function(r){return n.charAt(r)})},decompressFromEncodedURIComponent:function(r){return null==r?"":""==r?null:(r=r.replace(/ /g,"+"),i._decompress(r.length,32,function(o){return t(n,r.charAt(o))}))},compress:function(o){return i._compress(o,16,function(o){return r(o)})},_compress:function(r,o,n){if(null==r)return"";var e,t,i,s={},u={},a="",p="",c="",l=2,f=3,h=2,d=[],m=0,v=0;for(i=0;i<r.length;i+=1)if(a=r.charAt(i),Object.prototype.hasOwnProperty.call(s,a)||(s[a]=f++,u[a]=!0),p=c+a,Object.prototype.hasOwnProperty.call(s,p))c=p;else{if(Object.prototype.hasOwnProperty.call(u,c)){if(c.charCodeAt(0)<256){for(e=0;e<h;e++)m<<=1,v==o-1?(v=0,d.push(n(m)),m=0):v++;for(t=c.charCodeAt(0),e=0;e<8;e++)m=m<<1|1&t,v==o-1?(v=0,d.push(n(m)),m=0):v++,t>>=1}else{for(t=1,e=0;e<h;e++)m=m<<1|t,v==o-1?(v=0,d.push(n(m)),m=0):v++,t=0;for(t=c.charCodeAt(0),e=0;e<16;e++)m=m<<1|1&t,v==o-1?(v=0,d.push(n(m)),m=0):v++,t>>=1}0==--l&&(l=Math.pow(2,h),h++),delete u[c]}else for(t=s[c],e=0;e<h;e++)m=m<<1|1&t,v==o-1?(v=0,d.push(n(m)),m=0):v++,t>>=1;0==--l&&(l=Math.pow(2,h),h++),s[p]=f++,c=String(a)}if(""!==c){if(Object.prototype.hasOwnProperty.call(u,c)){if(c.charCodeAt(0)<256){for(e=0;e<h;e++)m<<=1,v==o-1?(v=0,d.push(n(m)),m=0):v++;for(t=c.charCodeAt(0),e=0;e<8;e++)m=m<<1|1&t,v==o-1?(v=0,d.push(n(m)),m=0):v++,t>>=1}else{for(t=1,e=0;e<h;e++)m=m<<1|t,v==o-1?(v=0,d.push(n(m)),m=0):v++,t=0;for(t=c.charCodeAt(0),e=0;e<16;e++)m=m<<1|1&t,v==o-1?(v=0,d.push(n(m)),m=0):v++,t>>=1}0==--l&&(l=Math.pow(2,h),h++),delete u[c]}else for(t=s[c],e=0;e<h;e++)m=m<<1|1&t,v==o-1?(v=0,d.push(n(m)),m=0):v++,t>>=1;0==--l&&(l=Math.pow(2,h),h++)}for(t=2,e=0;e<h;e++)m=m<<1|1&t,v==o-1?(v=0,d.push(n(m)),m=0):v++,t>>=1;for(;;){if(m<<=1,v==o-1){d.push(n(m));break}v++}return d.join("")},decompress:function(r){return null==r?"":""==r?null:i._decompress(r.length,32768,function(o){return r.charCodeAt(o)})},_decompress:function(o,n,e){var t,i,s,u,a,p,c,l=[],f=4,h=4,d=3,m="",v=[],g={val:e(0),position:n,index:1};for(t=0;t<3;t+=1)l[t]=t;for(s=0,a=Math.pow(2,2),p=1;p!=a;)u=g.val&g.position,g.position>>=1,0==g.position&&(g.position=n,g.val=e(g.index++)),s|=(u>0?1:0)*p,p<<=1;switch(s){case 0:for(s=0,a=Math.pow(2,8),p=1;p!=a;)u=g.val&g.position,g.position>>=1,0==g.position&&(g.position=n,g.val=e(g.index++)),s|=(u>0?1:0)*p,p<<=1;c=r(s);break;case 1:for(s=0,a=Math.pow(2,16),p=1;p!=a;)u=g.val&g.position,g.position>>=1,0==g.position&&(g.position=n,g.val=e(g.index++)),s|=(u>0?1:0)*p,p<<=1;c=r(s);break;case 2:return""}for(l[3]=c,i=c,v.push(c);;){if(g.index>o)return"";for(s=0,a=Math.pow(2,d),p=1;p!=a;)u=g.val&g.position,g.position>>=1,0==g.position&&(g.position=n,g.val=e(g.index++)),s|=(u>0?1:0)*p,p<<=1;switch(c=s){case 0:for(s=0,a=Math.pow(2,8),p=1;p!=a;)u=g.val&g.position,g.position>>=1,0==g.position&&(g.position=n,g.val=e(g.index++)),s|=(u>0?1:0)*p,p<<=1;l[h++]=r(s),c=h-1,f--;break;case 1:for(s=0,a=Math.pow(2,16),p=1;p!=a;)u=g.val&g.position,g.position>>=1,0==g.position&&(g.position=n,g.val=e(g.index++)),s|=(u>0?1:0)*p,p<<=1;l[h++]=r(s),c=h-1,f--;break;case 2:return v.join("")}if(0==f&&(f=Math.pow(2,d),d++),l[c])m=l[c];else{if(c!==h)return null;m=i+i.charAt(0)}v.push(m),l[h++]=i+m.charAt(0),i=m,0==--f&&(f=Math.pow(2,d),d++)}}};return i}();"function"==typeof define&&define.amd?define(function(){return LZString}):"undefined"!=typeof module&&null!=module?module.exports=LZString:"undefined"!=typeof angular&&null!=angular&&angular.module("LZString",[]).factory("LZString",function(){return LZString});</script>
 <script>
 /* ===== CourtMixer core helpers ===== */
-const APP_VERSION = "1.6.0";
+const APP_VERSION = "1.6.1";
 function uid() {
   try { if (typeof crypto !== "undefined" && crypto.randomUUID) return crypto.randomUUID(); } catch (e) {}
   var b = null;
@@ -2282,12 +2288,8 @@ renderPlayers();
 function showPsHintOnce() {
 if (localStorage.getItem("courtmixer_ps_hint_seen")) return;
 localStorage.setItem("courtmixer_ps_hint_seen", "1");
-const t = document.getElementById("psToast");
-if (!t) return;
-t.innerHTML = '<strong>Tip —</strong> a ✓ lasts for the next game only. Press &amp; hold the box to 🔒 lock a player until you clear it.';
-t.classList.add("show");
-clearTimeout(t._hideTimer);
-t._hideTimer = setTimeout(() => t.classList.remove("show"), 5000);
+// Routed through showToast so the tip is swipe/tap/Escape dismissible like every other toast.
+showToast('<strong>Tip —</strong> a ✓ lasts for the next game only. Press &amp; hold the box to 🔒 lock a player until you clear it.', false, 7000);
 }
 
 function stateBoxHtml(p, kind) {
@@ -3395,16 +3397,75 @@ function cmxConfirm(opts, onYes){
       { label: opts.no || "Cancel", cls: "ghost", onClick: function(){ if (opts.onNo) opts.onNo(); } }
     ] });
 }
-function showToast(html, withUndo){
+/* ===== Toasts =====
+   Short-lived and always dismissible by hand: swipe it away in any direction, tap the x,
+   or press Escape. The bar along the bottom counts the remaining time down so the
+   auto-dismiss never feels arbitrary. */
+const TOAST_UNDO_MS = 6000, TOAST_PLAIN_MS = 3000;
+function dismissToast(){
   const t = document.getElementById("psToast");
   if (!t) return;
-  t.innerHTML = '<span class="toast-msg">' + html + "</span>" + (withUndo ? '<button type="button" class="toast-undo" id="toastUndoBtn">Undo</button>' : "");
+  clearTimeout(t._hideTimer);
+  t.style.transition = "";
+  t.style.transform = "";
+  t.style.opacity = "";
+  t.classList.remove("show");
+}
+function showToast(html, withUndo, customMs){
+  const t = document.getElementById("psToast");
+  if (!t) return;
+  const ms = customMs || (withUndo ? TOAST_UNDO_MS : TOAST_PLAIN_MS);
+  t.innerHTML = '<span class="toast-msg">' + html + "</span>"
+    + (withUndo ? '<button type="button" class="toast-undo" id="toastUndoBtn">Undo</button>' : "")
+    + '<button type="button" class="toast-x" aria-label="Dismiss">×</button>'
+    + '<span class="toast-bar" style="animation-duration:' + ms + 'ms"></span>';
+  t.style.transition = ""; t.style.transform = ""; t.style.opacity = "";
   t.classList.add("show");
   clearTimeout(t._hideTimer);
-  t._hideTimer = setTimeout(function(){ t.classList.remove("show"); }, withUndo ? 10000 : 4500);
+  t._hideTimer = setTimeout(dismissToast, ms);
   const b = document.getElementById("toastUndoBtn");
-  if (b) b.onclick = function(){ t.classList.remove("show"); clearTimeout(t._hideTimer); undoLast(); };
+  if (b) b.onclick = function(){ dismissToast(); undoLast(); };
+  const x = t.querySelector(".toast-x");
+  if (x) x.onclick = dismissToast;
 }
+(function bindToastGestures(){
+  const t = document.getElementById("psToast");
+  if (!t) return;
+  let sx = 0, sy = 0, dragging = false, moved = false;
+  t.addEventListener("pointerdown", function(e){
+    if (e.target.closest && e.target.closest("button")) return; // Undo / x handle their own taps
+    dragging = true; moved = false; sx = e.clientX; sy = e.clientY;
+    t.style.transition = "none";
+  });
+  t.addEventListener("pointermove", function(e){
+    if (!dragging) return;
+    const dx = e.clientX - sx, dy = e.clientY - sy;
+    if (!moved && (Math.abs(dx) > 6 || Math.abs(dy) > 6)) moved = true;
+    if (!moved) return;
+    const down = Math.max(0, dy);
+    t.style.transform = "translateX(calc(-50% + " + dx + "px)) translateY(" + down + "px)";
+    t.style.opacity = String(Math.max(0, 1 - Math.max(Math.abs(dx), down) / 140));
+  });
+  t.addEventListener("pointerup", function(e){
+    if (!dragging) return;
+    dragging = false;
+    t.style.transition = "";
+    const dx = e.clientX - sx, dy = e.clientY - sy;
+    if (moved) {
+      if (Math.abs(dx) > 70 || dy > 60) { dismissToast(); return; }
+      t.style.transform = ""; t.style.opacity = "";
+      return;
+    }
+    // A stray tap should not silently throw away the chance to undo, so tap-to-dismiss
+    // only applies to toasts that have no Undo button.
+    if (!t.querySelector(".toast-undo")) dismissToast();
+  });
+  t.addEventListener("pointercancel", function(){
+    dragging = false;
+    t.style.transition = ""; t.style.transform = ""; t.style.opacity = "";
+  });
+  document.addEventListener("keydown", function(e){ if (e.key === "Escape") dismissToast(); });
+})();
 
 /* ===== One-level undo for destructive actions ===== */
 let _undo = null;
