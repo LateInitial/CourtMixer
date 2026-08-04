@@ -276,18 +276,18 @@ button.save-btn { background: #22a96e; }
 .pair-grid {
 display: grid;
 grid-template-columns: 1fr auto 1fr;
-gap: 8px;
+gap: 6px;
 align-items: stretch;
-margin-top: 6px;
+margin-top: 4px;
 }
 .pair {
 background: #eef3ff;
 border-radius: 10px;
-padding: 8px 10px 6px;
+padding: 6px 9px;
 min-height: 0;
 display: flex;
 flex-direction: column;
-gap: 2px;
+gap: 1px;
 justify-content: flex-start;
 }
 .pair-player {
@@ -295,13 +295,6 @@ font-size: var(--text-base);
 font-weight: 600;
 line-height: var(--leading-tight);
 color: var(--text);
-}
-.pair-avg {
-font-size: 11px;
-line-height: 1.25;
-margin-top: 1px;
-padding-top: 3px;
-border-top: 1px solid rgba(79, 111, 255, 0.12);
 }
 .pair-vs {
 font-weight: 800;
@@ -311,7 +304,7 @@ text-align: center;
 align-self: center;
 padding: 0 2px;
 }
-.match-tags { margin-top: 6px; }
+.match-tags { margin-top: 5px; }
 .match-layout-header {
 display: flex;
 flex-wrap: wrap;
@@ -397,7 +390,7 @@ box-shadow: 0 1px 4px rgba(79,111,255,0.15);
 .courts-grid {
 display: grid;
 grid-template-columns: repeat(2, 1fr);
-gap: 14px;
+gap: 10px;
 margin-top: 4px;
 }
 .courts-grid.courts-1 { grid-template-columns: 1fr; }
@@ -408,7 +401,7 @@ margin-top: 4px;
 background: linear-gradient(180deg, #fafdff, #f3f6ff);
 border: 1px solid #d8e3ff;
 border-radius: 14px;
-padding: 12px;
+padding: 10px;
 min-height: 0;
 }
 .court-card.court-empty {
@@ -423,17 +416,12 @@ border-color: #e8c96a;
 color: #8d5f1f;
 }
 .end-match-panel {
-margin-top: 14px;
-padding: 12px 14px;
-border-radius: 12px;
-background: #fff;
-border: 1px solid #e8dcc0;
-box-shadow: 0 1px 0 rgba(141, 95, 31, 0.06);
+margin-top: 8px;
 }
 .pair.has-score {
 flex-direction: row;
 align-items: center;
-gap: 10px;
+gap: 8px;
 }
 .pair.has-score .pair-main {
 flex: 1 1 auto;
@@ -445,7 +433,7 @@ gap: 2px;
 .pair-score {
 width: 48px;
 flex-shrink: 0;
-padding: 6px 2px;
+padding: 5px 2px;
 border-radius: 8px;
 border: 1px solid #c3d0f2;
 background: #fff;
@@ -516,7 +504,7 @@ font-weight: 700;
 text-transform: uppercase;
 letter-spacing: 0.5px;
 color: #6a769f;
-margin-bottom: 8px;
+margin-bottom: 5px;
 display: flex;
 align-items: center;
 justify-content: space-between;
@@ -526,11 +514,11 @@ flex-wrap: wrap;
 .court-card-actions {
 display: flex;
 flex-wrap: wrap;
-gap: 8px;
-margin-top: 12px;
+gap: 6px;
+margin-top: 8px;
 }
 .tag {
-display: inline-block; padding: 3px 7px; border-radius: 999px; font-size: 11px; margin: 2px 4px 0 0;
+display: inline-block; padding: 3px 7px; border-radius: 999px; font-size: 11px; margin: 0 4px 0 0;
 background: #e5ecff; color: #3b4e84; line-height: 1.25;
 }
 .tag.good { background: #dcf4e7; color: #246547; }
@@ -567,14 +555,16 @@ border: 1px solid #c8d5fb;
 .history-item.unscored { border-left-color: #f5a623; background: #fdf5e9; }
 .hist-scored { display: flex; flex-direction: column; gap: 3px; }
 .hist-sline { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.hist-tname { font-size: 13.5px; font-weight: 600; color: var(--text); flex: 1 1 auto; min-width: 0; }
-.hist-tname.win { color: #1f8a52; font-weight: 800; }
+.hist-tname { font-size: 13.5px; font-weight: 800; color: var(--text); flex: 1 1 auto; min-width: 0; }
+.hist-tname.win { color: #1f8a52; }
 .hist-snum { font-size: 16px; font-weight: 800; flex: 0 0 auto; min-width: 34px; text-align: right; }
 .hist-snum.win { color: #22a96e; }
 .score-live { border: 0; background: transparent; padding: 0 0 1px; width: 2.6em; text-align: right; font-family: inherit; cursor: pointer; -moz-appearance: textfield; border-bottom: 1px dotted #b9c6ef; }
 .score-live::-webkit-inner-spin-button, .score-live::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 .secondary.danger, button.danger { background: #e5484d; color: #fff; }
-.hist-snum.lose, .hist-tname.lose { color: #96a0bd; }
+/* The winner's green is the differentiator; the losing side stays full-contrast black so
+   both rows are equally easy to read. */
+.hist-snum.lose, .hist-tname.lose { color: var(--text); }
 /* Editing a saved score stages the change; this row is the commit point. */
 .score-commit { display: none; align-items: center; gap: 8px; margin-top: 7px; padding-top: 7px; border-top: 1px dashed #cfd9f5; }
 .history-item.dirty .score-commit { display: flex; }
@@ -670,20 +660,20 @@ padding: 7px 8px;
 .muted, #matchCourtHint, #matchFormatHint { font-size: 12px; line-height: 1.45; }
 .pair-grid {
 grid-template-columns: 1fr;
-gap: 6px;
+gap: 4px;
 }
 .pair-grid .pair-vs {
-padding: 2px 0;
-font-size: 12px;
+padding: 0;
+font-size: 11px;
+line-height: 1.1;
 }
-.pair-player { font-size: 13px; }
-.pair-avg { font-size: 10px; }
+.pair-player { font-size: 13px; line-height: 1.25; }
 .match-layout-header { flex-direction: column; align-items: stretch; }
-.court-card { padding: 10px; }
-.court-card-head { font-size: 10px; margin-bottom: 6px; }
-.end-match-panel { padding: 8px 10px; margin-top: 8px; }
+.court-card { padding: 8px; }
+.court-card-head { font-size: 10px; margin-bottom: 4px; }
+.end-match-panel { margin-top: 6px; }
 .pair-score { width: 44px; }
-.end-match-actions { flex-direction: column; gap: 6px; }
+.end-match-actions { flex-direction: column; gap: 5px; }
 .end-match-actions button { width: 100%; justify-content: center; padding: 8px 10px; }
 .history-item { padding: 7px 9px; margin-top: 5px; }
 .history-meta { margin-top: 4px; gap: 3px 5px; }
@@ -741,10 +731,10 @@ button#editModeBtn.active-edit { background:#4f6fff; }
 .mode-chip { border:1px solid #c8d5fb; background:#eef3ff; color:#5f6d94; border-radius:8px; padding:3px 7px; font-size:11px; font-weight:700; cursor:pointer; text-transform:none; letter-spacing:0; }
 .mode-chip.active { background:#4f6fff; color:#fff; border-color:#4f6fff; }
 .court-status { text-transform:none; font-weight:600; letter-spacing:0; font-size:12px; color:#6a769f; }
-.slot-select { width:100%; border:1px solid #c2d0ff; background:#fff; border-radius:8px; padding:6px 6px; font-size:13px; font-weight:600; color:var(--text); margin-bottom:4px; font-family:inherit; cursor:pointer; box-sizing:border-box; }
+.slot-select { width:100%; border:1px solid #c2d0ff; background:#fff; border-radius:8px; padding:5px 6px; font-size:13px; font-weight:600; color:var(--text); margin-bottom:3px; font-family:inherit; cursor:pointer; box-sizing:border-box; }
 .slot-select.slot-empty { color:#8a94b0; border-style:dashed; background:#f8f9fc; }
 .slot-select.slot-locked { background:#e6f8ee; border-color:var(--ok-border); border-style:solid; }
-.pair-grid.editable .pair { gap:3px; }
+.pair-grid.editable .pair { gap:2px; }
 .ps-toast { position:fixed; left:50%; bottom:max(22px, env(safe-area-inset-bottom)); transform:translateX(-50%) translateY(12px); width:min(80vw, 600px); box-sizing:border-box; display:flex; align-items:center; gap:12px; background:#fff; color:var(--text); border:1px solid #c8d5fb; border-left:4px solid var(--accent); border-radius:12px; padding:12px 16px; font-size:13.5px; line-height:1.45; box-shadow:0 8px 24px rgba(49,79,157,0.22); opacity:0; pointer-events:none; z-index:999; transition:opacity 0.3s ease, transform 0.3s ease; overflow:hidden; touch-action:none; cursor:grab; }
 .ps-toast.show { opacity:1; transform:translateX(-50%) translateY(0); pointer-events:auto; }
 .ps-toast .toast-msg { flex:1 1 auto; min-width:0; }
@@ -976,7 +966,7 @@ button#editModeBtn.active-edit { background:#4f6fff; }
 <script>/*! lz-string MIT */ var LZString=function(){var r=String.fromCharCode,o="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=",n="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+-$",e={};function t(r,o){if(!e[r]){e[r]={};for(var n=0;n<r.length;n++)e[r][r.charAt(n)]=n}return e[r][o]}var i={compressToBase64:function(r){if(null==r)return"";var n=i._compress(r,6,function(r){return o.charAt(r)});switch(n.length%4){default:case 0:return n;case 1:return n+"===";case 2:return n+"==";case 3:return n+"="}},decompressFromBase64:function(r){return null==r?"":""==r?null:i._decompress(r.length,32,function(n){return t(o,r.charAt(n))})},compressToUTF16:function(o){return null==o?"":i._compress(o,15,function(o){return r(o+32)})+" "},decompressFromUTF16:function(r){return null==r?"":""==r?null:i._decompress(r.length,16384,function(o){return r.charCodeAt(o)-32})},compressToUint8Array:function(r){for(var o=i.compress(r),n=new Uint8Array(2*o.length),e=0,t=o.length;e<t;e++){var s=o.charCodeAt(e);n[2*e]=s>>>8,n[2*e+1]=s%256}return n},decompressFromUint8Array:function(o){if(null==o)return i.decompress(o);for(var n=new Array(o.length/2),e=0,t=n.length;e<t;e++)n[e]=256*o[2*e]+o[2*e+1];var s=[];return n.forEach(function(o){s.push(r(o))}),i.decompress(s.join(""))},compressToEncodedURIComponent:function(r){return null==r?"":i._compress(r,6,function(r){return n.charAt(r)})},decompressFromEncodedURIComponent:function(r){return null==r?"":""==r?null:(r=r.replace(/ /g,"+"),i._decompress(r.length,32,function(o){return t(n,r.charAt(o))}))},compress:function(o){return i._compress(o,16,function(o){return r(o)})},_compress:function(r,o,n){if(null==r)return"";var e,t,i,s={},u={},a="",p="",c="",l=2,f=3,h=2,d=[],m=0,v=0;for(i=0;i<r.length;i+=1)if(a=r.charAt(i),Object.prototype.hasOwnProperty.call(s,a)||(s[a]=f++,u[a]=!0),p=c+a,Object.prototype.hasOwnProperty.call(s,p))c=p;else{if(Object.prototype.hasOwnProperty.call(u,c)){if(c.charCodeAt(0)<256){for(e=0;e<h;e++)m<<=1,v==o-1?(v=0,d.push(n(m)),m=0):v++;for(t=c.charCodeAt(0),e=0;e<8;e++)m=m<<1|1&t,v==o-1?(v=0,d.push(n(m)),m=0):v++,t>>=1}else{for(t=1,e=0;e<h;e++)m=m<<1|t,v==o-1?(v=0,d.push(n(m)),m=0):v++,t=0;for(t=c.charCodeAt(0),e=0;e<16;e++)m=m<<1|1&t,v==o-1?(v=0,d.push(n(m)),m=0):v++,t>>=1}0==--l&&(l=Math.pow(2,h),h++),delete u[c]}else for(t=s[c],e=0;e<h;e++)m=m<<1|1&t,v==o-1?(v=0,d.push(n(m)),m=0):v++,t>>=1;0==--l&&(l=Math.pow(2,h),h++),s[p]=f++,c=String(a)}if(""!==c){if(Object.prototype.hasOwnProperty.call(u,c)){if(c.charCodeAt(0)<256){for(e=0;e<h;e++)m<<=1,v==o-1?(v=0,d.push(n(m)),m=0):v++;for(t=c.charCodeAt(0),e=0;e<8;e++)m=m<<1|1&t,v==o-1?(v=0,d.push(n(m)),m=0):v++,t>>=1}else{for(t=1,e=0;e<h;e++)m=m<<1|t,v==o-1?(v=0,d.push(n(m)),m=0):v++,t=0;for(t=c.charCodeAt(0),e=0;e<16;e++)m=m<<1|1&t,v==o-1?(v=0,d.push(n(m)),m=0):v++,t>>=1}0==--l&&(l=Math.pow(2,h),h++),delete u[c]}else for(t=s[c],e=0;e<h;e++)m=m<<1|1&t,v==o-1?(v=0,d.push(n(m)),m=0):v++,t>>=1;0==--l&&(l=Math.pow(2,h),h++)}for(t=2,e=0;e<h;e++)m=m<<1|1&t,v==o-1?(v=0,d.push(n(m)),m=0):v++,t>>=1;for(;;){if(m<<=1,v==o-1){d.push(n(m));break}v++}return d.join("")},decompress:function(r){return null==r?"":""==r?null:i._decompress(r.length,32768,function(o){return r.charCodeAt(o)})},_decompress:function(o,n,e){var t,i,s,u,a,p,c,l=[],f=4,h=4,d=3,m="",v=[],g={val:e(0),position:n,index:1};for(t=0;t<3;t+=1)l[t]=t;for(s=0,a=Math.pow(2,2),p=1;p!=a;)u=g.val&g.position,g.position>>=1,0==g.position&&(g.position=n,g.val=e(g.index++)),s|=(u>0?1:0)*p,p<<=1;switch(s){case 0:for(s=0,a=Math.pow(2,8),p=1;p!=a;)u=g.val&g.position,g.position>>=1,0==g.position&&(g.position=n,g.val=e(g.index++)),s|=(u>0?1:0)*p,p<<=1;c=r(s);break;case 1:for(s=0,a=Math.pow(2,16),p=1;p!=a;)u=g.val&g.position,g.position>>=1,0==g.position&&(g.position=n,g.val=e(g.index++)),s|=(u>0?1:0)*p,p<<=1;c=r(s);break;case 2:return""}for(l[3]=c,i=c,v.push(c);;){if(g.index>o)return"";for(s=0,a=Math.pow(2,d),p=1;p!=a;)u=g.val&g.position,g.position>>=1,0==g.position&&(g.position=n,g.val=e(g.index++)),s|=(u>0?1:0)*p,p<<=1;switch(c=s){case 0:for(s=0,a=Math.pow(2,8),p=1;p!=a;)u=g.val&g.position,g.position>>=1,0==g.position&&(g.position=n,g.val=e(g.index++)),s|=(u>0?1:0)*p,p<<=1;l[h++]=r(s),c=h-1,f--;break;case 1:for(s=0,a=Math.pow(2,16),p=1;p!=a;)u=g.val&g.position,g.position>>=1,0==g.position&&(g.position=n,g.val=e(g.index++)),s|=(u>0?1:0)*p,p<<=1;l[h++]=r(s),c=h-1,f--;break;case 2:return v.join("")}if(0==f&&(f=Math.pow(2,d),d++),l[c])m=l[c];else{if(c!==h)return null;m=i+i.charAt(0)}v.push(m),l[h++]=i+m.charAt(0),i=m,0==--f&&(f=Math.pow(2,d),d++)}}};return i}();"function"==typeof define&&define.amd?define(function(){return LZString}):"undefined"!=typeof module&&null!=module?module.exports=LZString:"undefined"!=typeof angular&&null!=angular&&angular.module("LZString",[]).factory("LZString",function(){return LZString});</script>
 <script>
 /* ===== CourtMixer core helpers ===== */
-const APP_VERSION = "1.6.1";
+const APP_VERSION = "1.6.2";
 function uid() {
   try { if (typeof crypto !== "undefined" && crypto.randomUUID) return crypto.randomUUID(); } catch (e) {}
   var b = null;
@@ -1249,15 +1239,6 @@ const prefix = rank ? `#${rank} ` : "";
 const g = (p.gender === "F") ? "F" : "M";
 const stat = matchmakingMode === "mexicano" ? `${ptsOf(p)} pts` : fmtSkill(p);
 return `${prefix}${esc(p.name)} · ${g} · ${stat} · ${p.matches} GP`;
-}
-
-function pairAvgLabel(a, b) {
-if (matchmakingMode === "mexicano") {
-const avg = (ptsOf(a) + ptsOf(b)) / 2;
-return `Avg ${avg.toFixed(0)} pts`;
-}
-const avg = (skillOf(a) + skillOf(b)) / 2;
-return `Avg ${avg.toFixed(2)}`;
 }
 
 // A pool capped by games-played/rest can end up single-gender, which makes an XD court
@@ -1720,15 +1701,23 @@ updateMatchToolbar();
 }
 
 function updateMatchToolbar() {
+// The how-to text only earns its space before the first match of a session. Both resets and
+// "Start today's session" clear the history, so an empty history is exactly the condition
+// under which the hints should come back.
+const showHints = matchHistory.length === 0;
 const hint = document.getElementById("matchCourtHint");
 if (hint) {
-hint.textContent = "Tap a player slot to add or swap. Generate fills empty courts; each court also has its own Generate/Reroll, Clear and Confirm. MD/WD/XD set a court to men\u2019s, women\u2019s or mixed doubles. Once a match is in progress, type each team’s score in its own box, then Finish & save score.";
+hint.style.display = showHints ? "" : "none";
+hint.textContent = "Tap a slot to swap a player. Each court has its own Generate, Clear and Confirm; MD/WD/XD sets men\u2019s, women\u2019s or mixed doubles.";
 }
 const formatHint = document.getElementById("matchFormatHint");
 if (formatHint) {
+formatHint.style.display = showHints ? "" : "none";
 formatHint.textContent = matchmakingMode === "mexicano"
-? `Mexicano: ${courtCount === 1 ? "Balanced draws by rank and games played." : courtCount === 2 ? "Court 1 → top half, Court 2 → bottom half (flexible)." : courtCount === 3 ? "Court 1 → top, Court 2 → middle, Court 3 → bottom." : "Courts 1–2 → top half, Courts 3–4 → bottom half; middle ranks can land on any court."} GP stays even. Shows #rank and points.`
-: "Americano: balanced random draws by games played and skill. Priority players (max 4) are always included. Avoids the same partner or opponent back-to-back.";
+? (courtCount === 1
+? "Mexicano: balanced draws by rank and games played."
+: "Mexicano: higher courts take the higher ranks; games played stays even.")
+: "Americano: balanced draws by skill and games played, mixing partners all session.";
 }
 document.querySelectorAll(".format-segment").forEach(btn => {
 btn.classList.toggle("active", btn.dataset.matchmaking === matchmakingMode);
@@ -1749,16 +1738,16 @@ else gen.textContent = `Generate lineup (${n.length} open)`;
 }
 }
 
+// One line only. Of the four old tags, pair avg delta is the one that answers the question
+// the app exists to answer -- are these two teams evenly matched? Games fairness gap is about
+// scheduling rather than the match, and skill spread describes the group, not the balance.
+// Both the pending court card and the in-progress card render through here, so what you see
+// before Confirm start is exactly what you see after.
 function matchTagsHtml(m) {
 const isMex = matchmakingMode === "mexicano";
-const spreadLabel = isMex ? "Pts spread" : "Skill spread";
-const spreadVal = isMex ? (m.ptsSpread ?? 0) : m.spread;
-const spreadGood = isMex ? spreadVal <= 8 : spreadVal <= 2.5;
 const deltaGood = isMex ? m.pairDelta <= 6 : m.pairDelta <= 0.8;
 const deltaFmt = isMex ? m.pairDelta.toFixed(0) : m.pairDelta.toFixed(2);
 return `<div class="match-tags">
-<span class="tag good">Games fairness gap: ${m.fairnessGap}</span>
-<span class="tag ${spreadGood ? "good" : "warn"}">${spreadLabel}: ${spreadVal.toFixed(isMex ? 0 : 2)}</span>
 <span class="tag ${deltaGood ? "good" : "warn"}">Pair avg delta: ${deltaFmt}${isMex ? " pts" : ""}</span>
 <span class="tag ${m.repeated ? "warn" : "good"}">${m.repeated ? "Repeat pairing used" : "Repeat pairing avoided"}</span>
 </div>`;
@@ -1766,8 +1755,7 @@ return `<div class="match-tags">
 
 function pairSideHtml(team, ranks, scoreId, scoreLabel, scoreSub) {
 const inner = `<div class="pair-player">${playerLineLabel(team[0], ranks)}</div>
-<div class="pair-player">${playerLineLabel(team[1], ranks)}</div>
-<div class="pair-avg muted">${pairAvgLabel(team[0], team[1])}</div>`;
+<div class="pair-player">${playerLineLabel(team[1], ranks)}</div>`;
 if (!scoreId) return `<div class="pair">${inner}</div>`;
 return `<div class="pair has-score"><div class="pair-main">${inner}</div><input type="number" min="0" inputmode="numeric" readonly id="${scoreId}" class="pair-score score-pick" placeholder="0" aria-label="Score for ${esc(scoreLabel)}" data-team="${esc(scoreLabel)}" data-sub="${esc(scoreSub || "")}" /></div>`;
 }
@@ -2486,25 +2474,17 @@ const lockedCls = (cur && (courtSlotManual[cn][idx] || cur.priority)) ? " slot-l
 return `<select class="slot-select ${cur ? "" : "slot-empty"}${lockedCls}" data-court="${cn}" data-slot="${idx}" aria-label="Court ${cn} player ${idx + 1}">${opts}</select>`;
 }
 
-function pairAvgFromSlots(cn, i, j) {
-const a = byId(courtSlots[cn][i]), b = byId(courtSlots[cn][j]);
-if (!a || !b) return "";
-return pairAvgLabel(a, b);
-}
-
 function slotsTagsHtml(cn) {
 const ids = courtSlots[cn];
 const a = [byId(ids[0]), byId(ids[1])], b = [byId(ids[2]), byId(ids[3])];
 if (a.some(x => !x) || b.some(x => !x)) return "";
 const isMex = matchmakingMode === "mexicano";
-const everyone = [...a, ...b];
 const avgA = isMex ? (ptsOf(a[0]) + ptsOf(a[1])) / 2 : (skillOf(a[0]) + skillOf(a[1])) / 2;
 const avgB = isMex ? (ptsOf(b[0]) + ptsOf(b[1])) / 2 : (skillOf(b[0]) + skillOf(b[1])) / 2;
-const allSkills = everyone.map(p => skillOf(p)), allPts = everyone.map(ptsOf);
-const gpVals = everyone.map(p => p.matches);
 const key = pairKey([ids[0], ids[1]], [ids[2], ids[3]]);
-const m = { a, b, avgA, avgB, spread: Math.max(...allSkills) - Math.min(...allSkills), ptsSpread: Math.max(...allPts) - Math.min(...allPts), pairDelta: Math.abs(avgA - avgB), fairnessGap: Math.max(...gpVals) - Math.min(...gpVals), repeated: seenPairings.has(key) };
-return matchTagsHtml(m);
+// Same two values doConfirmCourt freezes onto the history entry, so the tags don't change
+// when the match starts.
+return matchTagsHtml({ pairDelta: Math.abs(avgA - avgB), repeated: seenPairings.has(key) });
 }
 
 function courtModeChipsHtml(cn) {
@@ -2537,9 +2517,9 @@ const sl = (idx) => slotSelectHtml(cn, idx, rankMap);
 return `<div class="court-card ${full ? "" : "court-empty"}">
 <div class="court-card-head"><span>Court ${cn}</span>${courtModeChipsHtml(cn)}<span class="court-status">${status}</span></div>
 <div class="pair-grid editable">
-<div class="pair">${sl(0)}${sl(1)}<div class="pair-avg muted">${pairAvgFromSlots(cn, 0, 1)}</div></div>
+<div class="pair">${sl(0)}${sl(1)}</div>
 <div class="pair-vs" aria-hidden="true">VS</div>
-<div class="pair">${sl(2)}${sl(3)}<div class="pair-avg muted">${pairAvgFromSlots(cn, 2, 3)}</div></div>
+<div class="pair">${sl(2)}${sl(3)}</div>
 </div>
 ${full ? slotsTagsHtml(cn) : ""}
 <div class="court-card-actions">${courtActionsHtml(cn, full, filledCount)}</div>
@@ -2732,6 +2712,58 @@ renderStats();
 renderMatchStats();
 }
 
+/* ===== Did You Know =====
+   Every fact is positive: nobody is named for losing, and no fact reports a poor record.
+   Selection guarantees one team fact and one individual fact, never repeats a name across
+   the three, and weights the rarer/more striking facts higher. The roll is seeded on the
+   scores themselves, so the three facts hold still while you browse and only change when a
+   score is saved, edited or deleted -- and a shared leaderboard shows the same three. */
+const FACT_KIND = {
+  TIGHT_MARGINS: "individual", CLUTCH: "individual", HIGH_WIN_RATE: "individual",
+  PARTNER_DIVERSITY: "individual", WIN_STREAK: "individual", UNDEFEATED: "individual",
+  POINT_DIFF_LEADER: "individual", HOT_FINISH: "individual", EFFICIENT_SCORER: "individual",
+  LUCKY_CHARM: "individual",
+  OPPONENT_VARIETY: "individual", DECISIVE: "individual",
+  PERFECT_DUO: "team", EXCLUSIVE_DUO: "team", RIVALRY: "team",
+  BLOWOUT: "team", UPSET: "team", TOP_SCORING_MATCH: "team", CLOSEST_GAME: "team"
+};
+// Tier A 2 (rare and striking) / Tier B 1.5 / Tier C 1 (steady statistical ones).
+const FACT_WEIGHT = {
+  WIN_STREAK: 2, UNDEFEATED: 2, PERFECT_DUO: 2, EXCLUSIVE_DUO: 2, UPSET: 2, CLOSEST_GAME: 2,
+  CLUTCH: 1.5, HIGH_WIN_RATE: 1.5, HOT_FINISH: 1.5, LUCKY_CHARM: 1.5,
+  RIVALRY: 1.5, BLOWOUT: 1.5, TOP_SCORING_MATCH: 1.5, DECISIVE: 1.5,
+  TIGHT_MARGINS: 1, PARTNER_DIVERSITY: 1, POINT_DIFF_LEADER: 1, EFFICIENT_SCORER: 1,
+  OPPONENT_VARIETY: 1
+};
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    let t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+function hashString(str) {
+  let h = 2166136261;
+  for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return h >>> 0;
+}
+// Changes only when a score is added, edited or removed -- not on every re-render.
+function funFactsSeed() {
+  const key = matchHistory
+    .filter(h => h.scoreA !== null && h.scoreA !== undefined)
+    .map(h => h.id + ":" + h.scoreA + ":" + h.scoreB)
+    .join("|");
+  return hashString(key || "empty");
+}
+function pickWeighted(pool, rnd) {
+  const total = pool.reduce((sum, f) => sum + f.weight, 0);
+  if (!pool.length || total <= 0) return null;
+  let r = rnd() * total;
+  for (const f of pool) { r -= f.weight; if (r <= 0) return f; }
+  return pool[pool.length - 1];
+}
+
 function computeFunFacts() {
 const facts = [];
 const scored = matchHistory.filter(h => h.scoreA !== null);
@@ -2739,19 +2771,22 @@ if (!scored.length || players.length < 2) return facts;
 
 const margin = (ms) => ms.reduce((s, h) => s + Math.abs(h.scoreA - h.scoreB), 0) / ms.length;
 const matchesOf = (id) => scored.filter(h => [...h.pairAIds, ...h.pairBIds].includes(id));
-const pushFact = (type, subjectIds, emoji, text, score = 50) => { facts.push({ type, subjectIds: [...new Set(subjectIds)].filter(Boolean), emoji, text, score }); };
+const pushFact = (type, subjectIds, emoji, text, score = 50) => {
+const ids = [...new Set(subjectIds)].filter(Boolean);
+facts.push({ type, subjectIds: ids, emoji, text, score, kind: FACT_KIND[type] || "individual", weight: FACT_WEIGHT[type] || 1 });
+};
 // Returns the single highest item by val(); null if the top value is tied (no clear winner).
 const uniqueTop = (arr, val) => { let best = null, bv = -Infinity, tie = false; arr.forEach(it => { const v = val(it); if (v > bv) { bv = v; best = it; tie = false; } else if (v === bv) { tie = true; } }); return tie ? null : best; };
 
-// CLOSE_SCORING — tightest average margin (unique)
+// TIGHT_MARGINS — tightest average margin (unique)
 const tight = uniqueTop(players.filter(p => matchesOf(p.id).length >= 2).map(p => ({ p, avg: margin(matchesOf(p.id)) })).filter(c => c.avg <= 4), c => -c.avg);
-if (tight) pushFact("CLOSE_SCORING", [tight.p.id], "🎯", `${nm(tight.p.name)} lives on the edge — their matches have an average margin of just <strong>${tight.avg.toFixed(1)} points</strong>. Every rally counts!`, 55 + (5 - tight.avg) * 4);
+if (tight) pushFact("TIGHT_MARGINS", [tight.p.id], "🎯", `${nm(tight.p.name)} lives on the edge — their matches have an average margin of just <strong>${tight.avg.toFixed(1)} points</strong>. Every rally counts!`, 55 + (5 - tight.avg) * 4);
 
-// CLOSE_SCORING — most clutch wins (unique)
+// CLUTCH — most clutch wins (unique)
 const comebacks = {};
 scored.forEach(h => { if (Math.abs(h.scoreA - h.scoreB) <= 3) (h.scoreA > h.scoreB ? h.pairAIds : h.pairBIds).forEach(id => comebacks[id] = (comebacks[id] || 0) + 1); });
 const clutch = uniqueTop(Object.entries(comebacks).filter(([, c]) => c >= 2).map(([id, c]) => ({ id, c })), o => o.c);
-if (clutch) { const p = byId(clutch.id); if (p) pushFact("CLOSE_SCORING", [p.id], "💪", `${nm(p.name)} thrives under pressure — they've won <strong>${clutch.c} nail-biting matches</strong> decided by 3 points or fewer. Clutch player!`, 60 + clutch.c * 6); }
+if (clutch) { const p = byId(clutch.id); if (p) pushFact("CLUTCH", [p.id], "💪", `${nm(p.name)} thrives under pressure — they've won <strong>${clutch.c} nail-biting matches</strong> decided by 3 points or fewer. Clutch player!`, 60 + clutch.c * 6); }
 
 // HIGH_WIN_RATE — unique highest
 // Rates are over games that actually have a score - a match ended without one is not a loss.
@@ -2781,7 +2816,7 @@ const streakTop = uniqueTop(Object.entries(playerResults).map(([id, res]) => { l
 if (streakTop) pushFact("WIN_STREAK", [streakTop.id], "🚀", `${nm(byId(streakTop.id)?.name)} is riding a hot streak — <strong>${streakTop.streak} wins in a row</strong>! Can anyone stop them?`, 60 + streakTop.streak * 7);
 
 
-// RIVALRY + HEAD_TO_HEAD — unique most-frequent pair
+// RIVALRY — unique most-frequent pair of opponents
 const rivalStats = {};
 scored.forEach(h => h.pairAIds.forEach(a => h.pairBIds.forEach(b => { const k = [a, b].sort().join("|"); rivalStats[k] = (rivalStats[k] || 0) + 1; })));
 const rivalTop = uniqueTop(Object.entries(rivalStats).filter(([, c]) => c >= 3).map(([k, c]) => ({ k, c })), o => o.c);
@@ -2789,11 +2824,30 @@ if (rivalTop) {
 const [id1, id2] = rivalTop.k.split("|"), n1 = byId(id1)?.name, n2 = byId(id2)?.name;
 if (n1 && n2) {
 pushFact("RIVALRY", [id1, id2], "⚔️", `${nm(n1)} and ${nm(n2)} have faced each other across the net <strong>${rivalTop.c} times</strong> — the group's most compelling rivalry!`, 55 + rivalTop.c * 4);
-let w1 = 0, w2 = 0;
-scored.forEach(h => { const a1 = h.pairAIds.includes(id1), b1 = h.pairBIds.includes(id1), a2 = h.pairAIds.includes(id2), b2 = h.pairBIds.includes(id2); if (!((a1 && b2) || (b1 && a2))) return; const aWon = h.scoreA > h.scoreB; if ((a1 && aWon) || (b1 && !aWon)) w1++; else w2++; });
-if (w1 !== w2) { const lead = w1 > w2 ? n1 : n2, hi = Math.max(w1, w2), lo = Math.min(w1, w2); pushFact("HEAD_TO_HEAD", [id1, id2], "🥊", `In the ${nm(n1)} vs ${nm(n2)} rivalry, ${nm(lead)} leads the head-to-head <strong>${hi}–${lo}</strong>.`, 58 + (hi - lo) * 6); }
 }
 }
+
+// CLOSEST_GAME — the tightest finish of the night (credits all four players, no loser framing)
+const closest = uniqueTop(scored.map(h => ({ h, m: Math.abs(h.scoreA - h.scoreB) })).filter(o => o.m >= 1 && o.m <= 3), o => -o.m);
+if (closest) { const h = closest.h; pushFact("CLOSEST_GAME", [...h.pairAIds, ...h.pairBIds], "\u{1F62C}", `Tightest game of the night: ${nm(h.pairA.join(" & "))} vs ${nm(h.pairB.join(" & "))} \u2014 settled by just <strong>${closest.m} point${closest.m === 1 ? "" : "s"}</strong>!`, 62 + (4 - closest.m) * 6); }
+
+// OPPONENT_VARIETY — unique most different opponents faced
+const oppSets = {};
+scored.forEach(h => h.pairAIds.forEach(a => h.pairBIds.forEach(b => {
+(oppSets[a] = oppSets[a] || new Set()).add(b);
+(oppSets[b] = oppSets[b] || new Set()).add(a);
+})));
+const oppTop = uniqueTop(Object.entries(oppSets).filter(([, set]) => set.size >= 4).map(([id, set]) => ({ id, c: set.size })), o => o.c);
+if (oppTop) { const p = byId(oppTop.id); if (p) pushFact("OPPONENT_VARIETY", [p.id], "\u{1F9ED}", `${nm(p.name)} has faced <strong>${oppTop.c} different opponents</strong> \u2014 they\u2019ve taken on nearly the whole room!`, 55 + oppTop.c * 3); }
+
+// DECISIVE — unique most wins by 10+ points
+const decisiveWins = {};
+scored.forEach(h => {
+if (Math.abs(h.scoreA - h.scoreB) < 10) return;
+(h.scoreA > h.scoreB ? h.pairAIds : h.pairBIds).forEach(id => { decisiveWins[id] = (decisiveWins[id] || 0) + 1; });
+});
+const decTop = uniqueTop(Object.entries(decisiveWins).filter(([, c]) => c >= 2).map(([id, c]) => ({ id, c })), o => o.c);
+if (decTop) { const p = byId(decTop.id); if (p) pushFact("DECISIVE", [p.id], "\u{1F3F9}", `${nm(p.name)} closes games out \u2014 <strong>${decTop.c} wins</strong> by 10 points or more.`, 58 + decTop.c * 6); }
 
 // EXCLUSIVE_DUO — unique (most wins among exclusive players)
 const partnerCount = {};
@@ -2833,12 +2887,38 @@ scored.forEach(h => { const aWon = h.scoreA > h.scoreB; [{ ids: h.pairAIds, won:
 const charmTop = uniqueTop(players.filter(p => teamWin[p.id] && teamWin[p.id].t >= 3).map(p => ({ p, rate: teamWin[p.id].w / teamWin[p.id].t })).filter(o => o.rate >= 0.6), o => o.rate);
 if (charmTop) pushFact("LUCKY_CHARM", [charmTop.p.id], "🍀", `Pair up with ${nm(charmTop.p.name)} and you tend to win — teams with them win <strong>${Math.round(charmTop.rate * 100)}%</strong> of the time.`, 55 + charmTop.rate * 40);
 
-// pick 3: best instance per type, light jitter for variety, no player twice
+// Keep the strongest instance of each type, then pick 3: one team, one individual, one
+// either -- weighted, seeded on the scores, and never naming the same player twice.
 const bestByType = {};
 facts.forEach(f => { if (!bestByType[f.type] || f.score > bestByType[f.type].score) bestByType[f.type] = f; });
-const ordered = Object.values(bestByType).map(f => ({ f, key: f.score + Math.random() * 8 })).sort((x, y) => y.key - x.key).map(o => o.f);
-const usedPlayerIds = new Set(), chosen = [];
-for (const f of ordered) { if (chosen.length >= 3) break; if (f.subjectIds.some(id => usedPlayerIds.has(id))) continue; chosen.push(f); f.subjectIds.forEach(id => usedPlayerIds.add(id)); }
+const pool = Object.values(bestByType);
+const rnd = mulberry32(funFactsSeed());
+const used = new Set(), chosen = [];
+const available = (kind) => pool.filter(f =>
+  chosen.indexOf(f) < 0 &&
+  (!kind || f.kind === kind) &&
+  !f.subjectIds.some(id => used.has(id)));
+const take = (kind) => {
+  const f = pickWeighted(available(kind), rnd);
+  if (!f) return null;
+  chosen.push(f);
+  f.subjectIds.forEach(id => used.add(id));
+  return f;
+};
+// A team fact is preferred but never forced: uniqueTop deliberately yields nothing when two
+// results tie, since crowning one of them would be unfair to the other. Three individual
+// facts is a perfectly good outcome.
+take("team");
+take("individual");
+take(null);
+// Early in a session one of the pools can be empty; fill the remaining slots rather than
+// showing fewer than three facts.
+while (chosen.length < 3 && take(null)) { /* keep filling */ }
+// Shuffle so the team fact is not always first.
+for (let i = chosen.length - 1; i > 0; i--) {
+  const j = Math.floor(rnd() * (i + 1));
+  const tmp = chosen[i]; chosen[i] = chosen[j]; chosen[j] = tmp;
+}
 return chosen.map(({ emoji, text }) => ({ emoji, text }));
 }
 
