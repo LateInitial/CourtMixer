@@ -42,6 +42,6 @@ A simple, self-contained matchmaking app for social **court sports** — badmint
 
 A single `index.html` file — plain HTML, CSS, and JavaScript with no dependencies and no build step. All data is stored locally in your browser via `localStorage`. The version is shown in the footer, and stamped into anything you share or export. Adding `?selftest` to the URL runs the built-in test suite.
 
+The shared interactive `.html` leaderboard contains no JavaScript at all — every table and player card is written into the file, and the tabs, ranking styles, sorting and player cards run on CSS alone. That means it works identically on iPhone and Android, including in previews that switch scripting off.
+
 > **Data note:** some browsers (notably iOS Safari) clear local storage after a period of inactivity, or when the page is opened as a downloaded file rather than the hosted link. For reliable retention, open the hosted URL, add it to your home screen (it installs with its own name and icon), and use **Export** to keep a backup.
->
-> **Sharing note:** the interactive `.html` leaderboard opens in any browser, but iPhones can't open an `.html` attachment directly — save it to Files first, then tap it. Send the image if in doubt.
