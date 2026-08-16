@@ -532,11 +532,20 @@ margin-top: 6px;
 }
 .history-meta {
 display: flex;
+flex-wrap: nowrap;
+align-items: center;
+gap: 8px;
+margin-top: 5px;
+}
+.hist-meta-tags {
+display: flex;
 flex-wrap: wrap;
 align-items: center;
 gap: 4px 6px;
-margin-top: 5px;
+min-width: 0;
+flex: 1 1 auto;
 }
+.history-meta .hist-del-btn { flex: 0 0 auto; margin-left: auto; }
 .history-meta .hist-time {
 color: #b0b8d4;
 font-size: 11px;
@@ -590,7 +599,6 @@ color: var(--text);
 }
 .score-save-btn { background: #22a96e; padding: 5px 10px; font-size: 12px; border-radius: 8px; }
 .hist-del-btn { background: #d9585f; padding: 5px 9px; font-size: 12px; border-radius: 8px; margin-left: 2px; }
-.win-badge { background: #dcf4e7; color: #246547; border-radius: 999px; padding: 2px 8px; font-size: 11px; font-weight: 700; }
 
 /* Leaderboard */
 .lb-table { width: 100%; border-collapse: separate; border-spacing: 0 5px; }
@@ -676,8 +684,9 @@ line-height: 1.1;
 .end-match-actions { flex-direction: column; gap: 5px; }
 .end-match-actions button { width: 100%; justify-content: center; padding: 8px 10px; }
 .history-item { padding: 7px 9px; margin-top: 5px; }
-.history-meta { margin-top: 4px; gap: 3px 5px; }
-.win-badge, .draw-badge { font-size: 10px; padding: 2px 6px; }
+.history-meta { margin-top: 4px; gap: 6px; }
+.hist-meta-tags { gap: 3px 5px; }
+.draw-badge { font-size: 10px; padding: 2px 6px; }
 .tag { font-size: 10px; padding: 2px 6px; margin: 0 4px 0 0; }
 #stats { font-size: 12px !important; line-height: 1.4; }
 .lb-table td { font-size: 14px; padding: 8px; }
@@ -782,8 +791,8 @@ button#editModeBtn.active-edit { background:#4f6fff; }
 <button id="saveDefaultBtn" class="secondary">Save as default</button>
 <button id="exportBtn" class="secondary" style="display:none;">Export Roster</button>
 <button id="importBtn" class="secondary" style="display:none;">Import Roster</button>
-<input type="file" id="importFile" accept="application/json,.json" style="display:none;" />
-<input type="file" id="importRosterFile" accept="application/json,.json" style="display:none;" />
+<input type="file" id="importFile" style="display:none;" />
+<input type="file" id="importRosterFile" style="display:none;" />
 <button id="editModeBtn" class="secondary">Edit</button>
 <span class="edit-mode-hint">✏️ Editing — update fields above &amp; press Save</span>
 </div>
@@ -962,11 +971,15 @@ button#editModeBtn.active-edit { background:#4f6fff; }
 .cmx-code{width:100%;box-sizing:border-box;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;border:1px solid #cbd5e1;border-radius:8px;padding:10px;resize:vertical;word-break:break-all;color:#334155;background:#f8fafc;}
 .cmx-copymsg{font-size:12px;color:#16a34a;min-height:16px;margin-top:6px;}
 .cmx-copymsg.err{color:#dc2626;}
+.cmx-namewrap{display:flex;align-items:center;gap:0;border:1px solid #cbd5e1;border-radius:8px;background:#fff;overflow:hidden;}
+.cmx-name{flex:1 1 auto;min-width:0;border:0;padding:11px 10px;font-size:15px;font-family:inherit;color:#1e293b;background:transparent;}
+.cmx-name:focus{outline:none;}
+.cmx-ext{flex:0 0 auto;padding:11px 10px;font-size:14px;color:#64748b;background:#f1f5f9;border-left:1px solid #e2e8f0;}
 </style>
 <script>/*! lz-string MIT */ var LZString=function(){var r=String.fromCharCode,o="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=",n="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+-$",e={};function t(r,o){if(!e[r]){e[r]={};for(var n=0;n<r.length;n++)e[r][r.charAt(n)]=n}return e[r][o]}var i={compressToBase64:function(r){if(null==r)return"";var n=i._compress(r,6,function(r){return o.charAt(r)});switch(n.length%4){default:case 0:return n;case 1:return n+"===";case 2:return n+"==";case 3:return n+"="}},decompressFromBase64:function(r){return null==r?"":""==r?null:i._decompress(r.length,32,function(n){return t(o,r.charAt(n))})},compressToUTF16:function(o){return null==o?"":i._compress(o,15,function(o){return r(o+32)})+" "},decompressFromUTF16:function(r){return null==r?"":""==r?null:i._decompress(r.length,16384,function(o){return r.charCodeAt(o)-32})},compressToUint8Array:function(r){for(var o=i.compress(r),n=new Uint8Array(2*o.length),e=0,t=o.length;e<t;e++){var s=o.charCodeAt(e);n[2*e]=s>>>8,n[2*e+1]=s%256}return n},decompressFromUint8Array:function(o){if(null==o)return i.decompress(o);for(var n=new Array(o.length/2),e=0,t=n.length;e<t;e++)n[e]=256*o[2*e]+o[2*e+1];var s=[];return n.forEach(function(o){s.push(r(o))}),i.decompress(s.join(""))},compressToEncodedURIComponent:function(r){return null==r?"":i._compress(r,6,function(r){return n.charAt(r)})},decompressFromEncodedURIComponent:function(r){return null==r?"":""==r?null:(r=r.replace(/ /g,"+"),i._decompress(r.length,32,function(o){return t(n,r.charAt(o))}))},compress:function(o){return i._compress(o,16,function(o){return r(o)})},_compress:function(r,o,n){if(null==r)return"";var e,t,i,s={},u={},a="",p="",c="",l=2,f=3,h=2,d=[],m=0,v=0;for(i=0;i<r.length;i+=1)if(a=r.charAt(i),Object.prototype.hasOwnProperty.call(s,a)||(s[a]=f++,u[a]=!0),p=c+a,Object.prototype.hasOwnProperty.call(s,p))c=p;else{if(Object.prototype.hasOwnProperty.call(u,c)){if(c.charCodeAt(0)<256){for(e=0;e<h;e++)m<<=1,v==o-1?(v=0,d.push(n(m)),m=0):v++;for(t=c.charCodeAt(0),e=0;e<8;e++)m=m<<1|1&t,v==o-1?(v=0,d.push(n(m)),m=0):v++,t>>=1}else{for(t=1,e=0;e<h;e++)m=m<<1|t,v==o-1?(v=0,d.push(n(m)),m=0):v++,t=0;for(t=c.charCodeAt(0),e=0;e<16;e++)m=m<<1|1&t,v==o-1?(v=0,d.push(n(m)),m=0):v++,t>>=1}0==--l&&(l=Math.pow(2,h),h++),delete u[c]}else for(t=s[c],e=0;e<h;e++)m=m<<1|1&t,v==o-1?(v=0,d.push(n(m)),m=0):v++,t>>=1;0==--l&&(l=Math.pow(2,h),h++),s[p]=f++,c=String(a)}if(""!==c){if(Object.prototype.hasOwnProperty.call(u,c)){if(c.charCodeAt(0)<256){for(e=0;e<h;e++)m<<=1,v==o-1?(v=0,d.push(n(m)),m=0):v++;for(t=c.charCodeAt(0),e=0;e<8;e++)m=m<<1|1&t,v==o-1?(v=0,d.push(n(m)),m=0):v++,t>>=1}else{for(t=1,e=0;e<h;e++)m=m<<1|t,v==o-1?(v=0,d.push(n(m)),m=0):v++,t=0;for(t=c.charCodeAt(0),e=0;e<16;e++)m=m<<1|1&t,v==o-1?(v=0,d.push(n(m)),m=0):v++,t>>=1}0==--l&&(l=Math.pow(2,h),h++),delete u[c]}else for(t=s[c],e=0;e<h;e++)m=m<<1|1&t,v==o-1?(v=0,d.push(n(m)),m=0):v++,t>>=1;0==--l&&(l=Math.pow(2,h),h++)}for(t=2,e=0;e<h;e++)m=m<<1|1&t,v==o-1?(v=0,d.push(n(m)),m=0):v++,t>>=1;for(;;){if(m<<=1,v==o-1){d.push(n(m));break}v++}return d.join("")},decompress:function(r){return null==r?"":""==r?null:i._decompress(r.length,32768,function(o){return r.charCodeAt(o)})},_decompress:function(o,n,e){var t,i,s,u,a,p,c,l=[],f=4,h=4,d=3,m="",v=[],g={val:e(0),position:n,index:1};for(t=0;t<3;t+=1)l[t]=t;for(s=0,a=Math.pow(2,2),p=1;p!=a;)u=g.val&g.position,g.position>>=1,0==g.position&&(g.position=n,g.val=e(g.index++)),s|=(u>0?1:0)*p,p<<=1;switch(s){case 0:for(s=0,a=Math.pow(2,8),p=1;p!=a;)u=g.val&g.position,g.position>>=1,0==g.position&&(g.position=n,g.val=e(g.index++)),s|=(u>0?1:0)*p,p<<=1;c=r(s);break;case 1:for(s=0,a=Math.pow(2,16),p=1;p!=a;)u=g.val&g.position,g.position>>=1,0==g.position&&(g.position=n,g.val=e(g.index++)),s|=(u>0?1:0)*p,p<<=1;c=r(s);break;case 2:return""}for(l[3]=c,i=c,v.push(c);;){if(g.index>o)return"";for(s=0,a=Math.pow(2,d),p=1;p!=a;)u=g.val&g.position,g.position>>=1,0==g.position&&(g.position=n,g.val=e(g.index++)),s|=(u>0?1:0)*p,p<<=1;switch(c=s){case 0:for(s=0,a=Math.pow(2,8),p=1;p!=a;)u=g.val&g.position,g.position>>=1,0==g.position&&(g.position=n,g.val=e(g.index++)),s|=(u>0?1:0)*p,p<<=1;l[h++]=r(s),c=h-1,f--;break;case 1:for(s=0,a=Math.pow(2,16),p=1;p!=a;)u=g.val&g.position,g.position>>=1,0==g.position&&(g.position=n,g.val=e(g.index++)),s|=(u>0?1:0)*p,p<<=1;l[h++]=r(s),c=h-1,f--;break;case 2:return v.join("")}if(0==f&&(f=Math.pow(2,d),d++),l[c])m=l[c];else{if(c!==h)return null;m=i+i.charAt(0)}v.push(m),l[h++]=i+m.charAt(0),i=m,0==--f&&(f=Math.pow(2,d),d++)}}};return i}();"function"==typeof define&&define.amd?define(function(){return LZString}):"undefined"!=typeof module&&null!=module?module.exports=LZString:"undefined"!=typeof angular&&null!=angular&&angular.module("LZString",[]).factory("LZString",function(){return LZString});</script>
 <script>
 /* ===== CourtMixer core helpers ===== */
-const APP_VERSION = "1.7.0";
+const APP_VERSION = "1.8.0";
 function uid() {
   try { if (typeof crypto !== "undefined" && crypto.randomUUID) return crypto.randomUUID(); } catch (e) {}
   var b = null;
@@ -2659,11 +2672,7 @@ item.className = "history-item " + (hasScore ? "scored" : "unscored");
 const teamA = formatPairNames(h.pairA);
 const teamB = formatPairNames(h.pairB);
 
-const winBadges = hasScore
-? (isDraw
-? `<span class="draw-badge">Draw</span>`
-: `<span class="win-badge">${esc(formatPairNames(aWon ? h.pairA : h.pairB))} won</span>`)
-: "";
+const drawBadge = (hasScore && isDraw) ? `<span class="draw-badge">Draw</span>` : "";
 
 item.innerHTML = `
 ${hasScore ? `<div class="hist-scored">
@@ -2672,17 +2681,19 @@ ${hasScore ? `<div class="hist-scored">
 <div class="score-commit"><span class="score-commit-note">Edited &mdash; not saved yet</span><button type="button" class="score-save-btn" data-commit="${h.id}">Save</button><button type="button" class="score-revert-btn" data-revert="${h.id}">Revert</button></div>
 </div>` : ""}
 <div class="history-meta">
+<div class="hist-meta-tags">
 <span class="tag ${h.repeated ? "warn" : "good"}">${h.repeated ? "Repeat" : "Unique"}</span>
 ${endedNoScore ? `<span class="tag warn">Ended · no score</span>` : ""}
-${winBadges}
+${drawBadge}
 ${h.court ? `<span class="tag hist-court-tag">Court ${h.court}</span>` : ""}
 <span class="hist-time">${h.time}</span>
-${hasScore ? `<button class="hist-del-btn" data-hid="${h.id}" title="Delete this match">Del</button>` : ""}
+</div>
+<button class="hist-del-btn" data-hid="${h.id}" title="Delete this match">Del</button>
 </div>
 ${hasScore ? "" : `<div class="score-entry" id="se-${h.id}">
 <div class="score-line"><span class="score-names">${esc(teamA)}</span><input type="number" min="0" readonly id="sa-${h.id}" class="score-pick" value="${h.scoreA ?? ""}" placeholder="0" data-team="${esc(teamA)}" data-sub="${h.court ? `Court ${h.court}` : ""}" /></div>
 <div class="score-line"><span class="score-names">${esc(teamB)}</span><input type="number" min="0" readonly id="sb-${h.id}" class="score-pick" value="${h.scoreB ?? ""}" placeholder="0" data-team="${esc(teamB)}" data-sub="${h.court ? `Court ${h.court}` : ""}" /></div>
-<div class="score-actions"><button class="score-save-btn" data-hid="${h.id}">Save</button><button class="hist-del-btn" data-hid="${h.id}" title="Delete this match">Del</button></div>
+<div class="score-actions"><button class="score-save-btn" data-hid="${h.id}">Save</button></div>
 </div>`}
 `;
 list.appendChild(item);
@@ -3116,6 +3127,7 @@ function shareFileBase(){ var nm = (sessionName && sessionName.trim()) ? session
    the shared file -- iOS previews attachments in QuickLook, which renders HTML and CSS but
    disables scripting, so everything script-generated used to arrive blank on iPhones.
    One code path means Android and iPhone cannot diverge. */
+const APP_URL = "https://lateinitial.github.io/CourtMixer/";
 const VIEWER_STYLES = [["points", "Points"], ["adjpts", "Adj-Pts"], ["league", "League"], ["ptspergp", "Pts/GP"]];
 const VIEWER_SORT_COLS = [["name", "Name"], ["gender", "M/F"], ["gp", "GP"], ["md", "MD"], ["wd", "WD"], ["xd", "XD"]];
 
@@ -3169,6 +3181,9 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:Inter,'Segoe UI'
 .ctl{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;clip:rect(0 0 0 0);}
 .wrap{max-width:560px;margin:0 auto;padding:14px;padding-left:max(14px,env(safe-area-inset-left));padding-right:max(14px,env(safe-area-inset-right));}
 .brand{padding:6px 4px 12px;}
+.brand-link{display:inline-block;text-decoration:none;}
+.brand-cta{font-size:11px;color:var(--muted);margin-top:5px;}
+.brand-cta a{color:#4f6ef7;text-decoration:none;font-weight:600;}
 .brand-logo{height:42px;width:auto;display:block;}
 .tabs{display:flex;background:#e7edff;border-radius:12px;padding:4px;gap:4px;margin-bottom:12px;}
 .tab{flex:1;border:1px solid #d3ddf5;background:#fff;padding:10px;border-radius:9px;font-weight:600;color:var(--muted);cursor:pointer;font-size:14px;text-align:center;user-select:none;-webkit-user-select:none;}
@@ -3209,8 +3224,8 @@ table.lb th:nth-child(5),table.lb td:nth-child(5){width:80px;white-space:nowrap;
 .sg-body{display:flex;flex-direction:column;}
 .sg .r{display:grid;grid-template-columns:minmax(64px,1fr) 44px 44px 44px 44px 44px;align-items:center;background:#f5f8ff;border:1px solid #e1e9ff;border-radius:9px;padding:9px 4px;margin-bottom:5px;font-size:14px;text-align:center;}
 .sg .r>div:nth-child(1){text-align:left;font-weight:700;}
-.sortarrows{display:inline-flex;gap:3px;margin-left:3px;vertical-align:middle;}
-.sortarrows label{cursor:pointer;color:#b9c2da;font-size:10px;line-height:1;user-select:none;-webkit-user-select:none;padding:1px;}
+.sg .hr .s label{display:none;cursor:pointer;padding:7px 2px;margin:-7px -2px;border-radius:6px;user-select:none;-webkit-user-select:none;white-space:nowrap;}
+.sg .hr .s .lb-a{display:block;}
 .gM{color:#2563eb;font-weight:700;}
 .gF{color:#db2777;font-weight:700;}
 .hist{background:#f8faff;border:1px solid #e1e9ff;border-radius:10px;padding:10px 12px;margin-bottom:8px;}
@@ -3275,8 +3290,10 @@ table.lb th:nth-child(5),table.lb td:nth-child(5){width:80px;white-space:nowrap;
     const k = col[0];
     css += `#sort-${k}-a:checked ~ .wrap .sg-body .r{order:var(--o-${k});}\n`;
     css += `#sort-${k}-d:checked ~ .wrap .sg-body .r{order:calc(0 - var(--o-${k}));}\n`;
-    css += `#sort-${k}-a:checked ~ .wrap .sa-${k}-a{color:#4f6ef7;}\n`;
-    css += `#sort-${k}-d:checked ~ .wrap .sa-${k}-d{color:#4f6ef7;}\n`;
+    css += `#sort-${k}-a:checked ~ .wrap .s-${k} .lb-a{display:none;}\n`;
+    css += `#sort-${k}-a:checked ~ .wrap .s-${k} .lb-d{display:block;color:#4f6ef7;}\n`;
+    css += `#sort-${k}-d:checked ~ .wrap .s-${k} .lb-a{display:none;}\n`;
+    css += `#sort-${k}-d:checked ~ .wrap .s-${k} .lb-r{display:block;color:#4f6ef7;}\n`;
   });
   // One rule per player card
   for (let i = 0; i < playerCount; i++) css += `#pd-${i}:checked ~ .pdm-${i}{display:flex;}\n`;
@@ -3367,8 +3384,9 @@ function buildInteractiveViewerHTML() {
       : "";
     let meta = "";
     if (cat) meta += `<span class="tag">${esc(cat)}</span>`;
+    // No "X won" tag: the green name and score already say it. Draw is kept because a draw
+    // colours nothing, so the badge is its only signal. Matches the app's History tab.
     if (draw) meta += `<span class="tag">Draw</span>`;
-    else if (has) meta += `<span class="tag win">${esc(formatPairNames(aWon ? h.pairA : h.pairB))} won</span>`;
     if (h.court) meta += `<span class="tag">Court ${esc(String(h.court))}</span>`;
     if (h.time) meta += `<span class="muted">${esc(h.time)}</span>`;
     histHtml += `<div class="hist"><div class="hist-top"><div class="hist-match">`
@@ -3381,10 +3399,13 @@ function buildInteractiveViewerHTML() {
   // --- match stats, sortable without script
   let statsHead = "";
   VIEWER_SORT_COLS.forEach(function (col) {
-    statsHead += `<div>${esc(col[1])}<span class="sortarrows">`
-      + `<label class="sa-${col[0]}-a" for="sort-${col[0]}-a" title="Sort ascending">▲</label>`
-      + `<label class="sa-${col[0]}-d" for="sort-${col[0]}-d" title="Sort descending">▼</label>`
-      + `</span></div>`;
+    // Three stacked labels, one visible at a time: tapping the whole header cell cycles
+    // unsorted -> ascending -> descending -> ascending, exactly like the app.
+    statsHead += `<div class="s s-${col[0]}">`
+      + `<label class="lb-a" for="sort-${col[0]}-a">${esc(col[1])}</label>`
+      + `<label class="lb-d" for="sort-${col[0]}-d">${esc(col[1])} ▲</label>`
+      + `<label class="lb-r" for="sort-${col[0]}-a">${esc(col[1])} ▼</label>`
+      + `</div>`;
   });
   let statsRows = "";
   stats.rows.forEach(function (r) {
@@ -3419,7 +3440,7 @@ function buildInteractiveViewerHTML() {
 <body>
 ${ctl}
 <div class="wrap">
-<div class="brand"><img class="brand-logo" src="data:image/svg+xml;base64,${CMX_LOGO_B64}" alt="CourtMixer"></div>
+<div class="brand"><a class="brand-link" href="${APP_URL}" target="_blank" rel="noopener"><img class="brand-logo" src="data:image/svg+xml;base64,${CMX_LOGO_B64}" alt="CourtMixer"></a><div class="brand-cta">Made with <a href="${APP_URL}" target="_blank" rel="noopener">CourtMixer</a> \u2014 tap to open the app</div></div>
 <div class="tabs"><label class="tab t-lb" for="v-lb">Leaderboard</label><label class="tab t-hist" for="v-hist">History</label></div>
 <section id="lbv" class="view">
 <div class="card">${sess}<div class="styles">${pills}</div>${boardsHtml}<div class="lb-hint">Tap a name for player details.</div></div>
@@ -3431,7 +3452,7 @@ ${factsCard}
 <div id="mh" class="subview"><div class="card">${histHtml}</div></div>
 <div id="ms" class="subview"><div class="card"><div class="sg"><div class="hr">${statsHead}</div><div class="sg-body">${statsRows}</div></div></div></div>
 </section>
-<div class="foot">Shared from CourtMixer v${esc(APP_VERSION)} · read-only snapshot</div>
+<div class="foot">Shared from <a href="${APP_URL}" target="_blank" rel="noopener" style="color:#4f6ef7;text-decoration:none;">CourtMixer</a> v${esc(APP_VERSION)} · read-only snapshot</div>
 </div>
 ${modals}
 </body>
@@ -3700,12 +3721,13 @@ function buildSessionPayload(){
   return { app:"CourtMixer", type:"session", version:1, exportedAt:new Date().toISOString(), players:players, history:matchHistory, seen:Array.from(seenPairings), courtCount:courtCount, scoringStyle:scoringStyle, matchmakingMode:matchmakingMode, customDefaults:rosterDefault, sessionName:sessionName, sessionDate:sessionDate };
 }
 function exportRosterFile(){
-  var data=buildRosterPayload();
-  var blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"});
-  var fname="CourtMixer-roster-"+(sessionDate||todayISO())+".json";
-  var file=new File([blob],fname,{type:"application/json"});
-  if(navigator.canShare && navigator.canShare({files:[file]})){ navigator.share({files:[file],title:"CourtMixer roster"}).catch(function(){}); return; }
-  var url=URL.createObjectURL(blob); var a=document.createElement("a"); a.href=url; a.download=fname; document.body.appendChild(a); a.click(); a.remove(); setTimeout(function(){URL.revokeObjectURL(url);},1500);
+  cmxSaveFileDialog({
+    title: "Export roster",
+    note: "Saves your players (name, gender, skill). Name the file, then choose where it goes.",
+    defaultName: "CourtMixer-roster-" + (sessionDate || todayISO()),
+    ext: ".json", mime: "application/json",
+    makeBlob: function(){ return new Blob([JSON.stringify(buildRosterPayload(), null, 2)], { type: "application/json" }); }
+  });
 }
 function applyRosterImport(data){
   if(!data || data.app!=="CourtMixer" || !Array.isArray(data.players) || !data.players.length){ cmxAlert("No players found in that roster code/file."); return; }
@@ -3735,7 +3757,7 @@ function doApplyRosterImport(data){
 }
 function importRosterFromFile(file){
   var reader=new FileReader();
-  reader.onload=function(e){ var data; try{ data=JSON.parse(e.target.result); }catch(err){ cmxAlert("That file isn't a valid CourtMixer roster."); return; } applyRosterImport(data); };
+  reader.onload=function(e){ var data; try{ data=JSON.parse(e.target.result); }catch(err){ cmxAlert("That file isn't a CourtMixer roster.\n\nPick the .json or .txt file that CourtMixer exported."); return; } applyRosterImport(data); };
   reader.readAsText(file);
 }
 function applySessionImport(data){
@@ -3754,7 +3776,12 @@ function _cmxDecode(text){
   try{ return JSON.parse(s); }catch(e){ return null; }
 }
 function cmxCloseModal(){ var o=document.getElementById("cmxModal"); if(o){ o.style.display="none"; var b=document.getElementById("cmxModalBox"); if(b) b.innerHTML=""; } }
+// Bumped on every open. A button handler that opens a second modal (an export dialog, a
+// confirmation, an error alert) must not have that new modal closed by the handler it came
+// from, so the auto-close below only fires if no newer modal appeared meanwhile.
+var _cmxModalSeq = 0;
 function cmxShowModal(opts){
+  _cmxModalSeq++;
   var o=document.getElementById("cmxModal"), box=document.getElementById("cmxModalBox");
   box.innerHTML='<div class="cmx-modal-head"><span class="cmx-modal-title"></span><button type="button" class="cmx-modal-x" aria-label="Close">×</button></div><div class="cmx-modal-body"></div><div class="cmx-modal-actions"></div>';
   box.querySelector(".cmx-modal-title").textContent = opts.title||"";
@@ -3762,7 +3789,11 @@ function cmxShowModal(opts){
   var acts=box.querySelector(".cmx-modal-actions");
   (opts.buttons||[]).forEach(function(b){
     var btn=document.createElement("button"); btn.type="button"; btn.className="cmx-modal-btn "+(b.cls||""); btn.textContent=b.label;
-    btn.onclick=function(){ var r = b.onClick ? b.onClick(box) : undefined; if(!b.keepOpen && r!==false) cmxCloseModal(); };
+    btn.onclick=function(){
+      var seq = _cmxModalSeq;
+      var r = b.onClick ? b.onClick(box) : undefined;
+      if(!b.keepOpen && r!==false && _cmxModalSeq === seq) cmxCloseModal();
+    };
     acts.appendChild(btn);
   });
   box.querySelector(".cmx-modal-x").onclick=cmxCloseModal;
@@ -3894,10 +3925,93 @@ function cmxCopy(text, box){
   function fail(){ var t=box && box.querySelector("#cmxCodeOut"); if(t){ t.focus(); t.select(); try{ document.execCommand("copy"); done(); return; }catch(e){} } if(msg){ msg.textContent="Press and hold the code to copy it."; msg.className="cmx-copymsg err"; } }
   if(navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(text).then(done).catch(fail); } else { fail(); }
 }
+function cmxSafeName(v, fallback){
+  var n = String(v == null ? "" : v).trim().replace(/[\\/:*?"<>|]+/g, "-").replace(/\s+/g, " ").replace(/^[.\s]+|[.\s]+$/g, "");
+  return n || fallback;
+}
+function cmxDownload(blob, fname){
+  var url = URL.createObjectURL(blob), a = document.createElement("a");
+  a.href = url; a.download = fname;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(function(){ URL.revokeObjectURL(url); }, 1500);
+}
+// Exports used to fire straight into the Web Share sheet (or a silent download) with a fixed
+// name, which looked like the button doing nothing. Now you always name the file first and
+// pick explicitly where it goes, with a toast either way.
+function cmxSaveFileDialog(opts){
+  var suggested = cmxSafeName(opts.defaultName, "CourtMixer");
+  cmxShowModal({
+    title: opts.title || "Save file",
+    bodyHTML: '<p class="cmx-modal-text">' + esc(opts.note || "Name the file, then choose where it goes.") + '</p>'
+      + '<div class="cmx-namewrap"><input id="cmxFileName" class="cmx-name" type="text" spellcheck="false" autocomplete="off" autocapitalize="off"><span class="cmx-ext">' + esc(opts.ext) + '</span></div>',
+    buttons: (function(){
+      // Send the real .json when the browser allows it; .txt is only a fallback for
+      // platforms that refuse JSON (Chrome on Android shares an allow-listed set of types).
+      function probeType(ext, mime) {
+        try {
+          const f = new File([new Blob(["{}"], { type: mime })], "probe" + ext, { type: mime });
+          return (navigator.canShare && navigator.canShare({ files: [f] })) ? { ext: ext, mime: mime } : null;
+        } catch (e) { return null; }
+      }
+      var shareAs = probeType(opts.ext, opts.mime) || probeType(".txt", "text/plain");
+      var canSend = !!shareAs;
+        var btns = [{ label: "Save to device", cls: "primary", keepOpen: true, onClick: function(box){
+        var nameEl = box.querySelector("#cmxFileName");
+        var fname = cmxSafeName(nameEl && nameEl.value, suggested) + opts.ext;
+        cmxDownload(opts.makeBlob(), fname);
+        cmxCloseModal();
+        showToast("Saved <strong>" + esc(fname) + "</strong> to your downloads.");
+        return false;
+      } }];
+      if (canSend) btns.push({ label: "Send to another device\u2026", cls: "secondary", keepOpen: true, onClick: function(box){
+        var nameEl = box.querySelector("#cmxFileName");
+        var base = cmxSafeName(nameEl && nameEl.value, suggested);
+        var blob = opts.makeBlob();
+        var shareName = base + shareAs.ext;
+        var file = new File([blob], shareName, { type: shareAs.mime });
+        var saveInstead = function (why) {
+          cmxDownload(blob, base + opts.ext);
+          showToast("Your phone would not share that file (" + esc(why) + "), so it is saved in your downloads as <strong>" + esc(base + opts.ext) + "</strong>.");
+        };
+        // share() must be the first thing this gesture does. It needs transient user
+        // activation, and tearing the modal down first can spend it. The payload is also
+        // exactly what canShare() was probed with -- adding title/text to a file share is
+        // enough for some builds to reject it outright.
+        var p;
+        try {
+          p = navigator.share({ files: [file] });
+        } catch (err) {
+          cmxCloseModal();
+          saveInstead((err && err.name) || "refused");
+          return false;
+        }
+        cmxCloseModal();
+        p.then(function () {
+          showToast("Sent <strong>" + esc(shareName) + "</strong>. Open it with Import on the other device.");
+        }).catch(function (err) {
+          var name = (err && err.name) || "unknown";
+          // AbortError is the only one that genuinely means "the user backed out". Anything
+          // else is the browser refusing, and must not be reported as a cancellation.
+          if (name === "AbortError") { showToast("Sharing cancelled."); return; }
+          saveInstead(name);
+        });
+        return false;
+      } });
+      btns.push({ label: "Cancel", cls: "ghost", onClick: function(){} });
+      return btns;
+    })(),
+    onOpen: function(box){
+      var inp = box.querySelector("#cmxFileName");
+      if (!inp) return;
+      inp.value = suggested;
+      setTimeout(function(){ try { inp.focus(); inp.select(); } catch (e) {} }, 40);
+    }
+  });
+}
 function cmxExportChooser(kind){
   var isRoster = kind==="roster";
   cmxShowModal({ title: isRoster?"Export roster":"Export history",
-    bodyHTML:'<p class="cmx-modal-text">Choose how to share '+(isRoster?"your roster":"this session")+'.</p>',
+    bodyHTML:'<p class="cmx-modal-text">Choose how to share '+(isRoster?"your roster":"this session")+'.</p>'+'<p class="cmx-modal-text" style="margin:6px 0 0;font-size:12px;">Sending a file is quickest. If your phone refuses to share it, <strong>Export as text</strong> gives you a code you can paste into any chat.</p>',
     buttons:[
       { label:"Export as text", cls:"primary", onClick:function(){ cmxExportText(kind); return false; } },
       { label:"Export as file", cls:"secondary", onClick:function(){ if(isRoster) exportRosterFile(); else exportBackup(); } },
@@ -3947,21 +4061,23 @@ function exportBackup() {
 const rosterDefault = (customDefaults && customDefaults.length)
 ? customDefaults
 : players.map(p => ({ name: p.name, gender: (p.gender === "F" ? "F" : "M"), skill: p.skill }));
-const data = { app: "CourtMixer", type: "session", version: 1, exportedAt: new Date().toISOString(), players, matchHistory, seen: Array.from(seenPairings), courtCount, scoringStyle, matchmakingMode, customDefaults: rosterDefault, sessionName, sessionDate };
-const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
-const fname = "CourtMixer-backup-" + (sessionDate || todayISO()) + ".json";
-const file = new File([blob], fname, { type: "application/json" });
-if (navigator.canShare && navigator.canShare({ files: [file] })) { navigator.share({ files: [file], title: "CourtMixer backup" }).catch(() => {}); return; }
-const url = URL.createObjectURL(blob);
-const a = document.createElement("a"); a.href = url; a.download = fname; document.body.appendChild(a); a.click(); a.remove();
-setTimeout(() => URL.revokeObjectURL(url), 1500);
+// The key MUST stay "history": renaming the variable to matchHistory in v1.6.0 silently
+// changed this shorthand key, so exported backups no longer round-tripped through import.
+const data = { app: "CourtMixer", type: "session", version: 1, exportedAt: new Date().toISOString(), players, history: matchHistory, seen: Array.from(seenPairings), courtCount, scoringStyle, matchmakingMode, customDefaults: rosterDefault, sessionName, sessionDate };
+cmxSaveFileDialog({
+title: "Export history",
+note: "Saves this whole session \u2014 players, matches, scores and settings. Name the file, then choose where it goes.",
+defaultName: "CourtMixer-backup-" + (sessionDate || todayISO()),
+ext: ".json", mime: "application/json",
+makeBlob: function(){ return new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }); }
+});
 }
 
 function importBackup(file) {
 const reader = new FileReader();
 reader.onload = (e) => {
 let data;
-try { data = JSON.parse(e.target.result); } catch (err) { cmxAlert("That file isn't a valid CourtMixer backup."); return; }
+try { data = JSON.parse(e.target.result); } catch (err) { cmxAlert("That file isn't a CourtMixer backup.\n\nPick the .json or .txt file that CourtMixer exported \u2014 not a photo or a shared leaderboard."); return; }
 applyBackupData(data);
 };
 reader.readAsText(file);
@@ -4009,7 +4125,8 @@ showToast("Backup imported.", true);
 
 function doApplyBackup(data) {
 players = data.players.map(p => ({ id: p.id || uid(), name: String(p.name || ""), gender: p.gender === "F" ? "F" : "M", skill: normSkillData(p.skill), matches: Number(p.matches) || 0, wins: Number(p.wins) || 0, points: Number(p.points) || 0, priority: false, skip: false, priorityLock: false, skipLock: false, pointsDiff: Number(p.pointsDiff) || 0 }));
-const rawHist = Array.isArray(data.history) ? data.history : [];
+// v1.6.0-v1.7.0 wrote the array under "matchHistory"; accept both so those backups still load.
+const rawHist = Array.isArray(data.history) ? data.history : (Array.isArray(data.matchHistory) ? data.matchHistory : []);
 matchHistory = rawHist.map(normalizeHistoryEntry).filter(Boolean);
 const dropped = rawHist.length - matchHistory.length;
 seenPairings.clear(); (Array.isArray(data.seen) ? data.seen : []).forEach(k => seenPairings.add(k));
@@ -4212,6 +4329,33 @@ function runSelfTests(){
     eq("undo clears diff", byId("a").pointsDiff, 0);
     eq("undo clears raw", byId("a").rawPoints, 0);
 
+    out.push("export payload shape");
+    // The exported key is "history". A shorthand rename silently changed it in v1.6.0 and
+    // every backup file lost its match history on import, so pin the contract here.
+    const payload = JSON.parse(JSON.stringify(buildSessionPayload()));
+    ok("session export uses the 'history' key", Array.isArray(payload.history));
+    eq("exported history length", payload.history.length, matchHistory.length);
+    ok("no stray 'matchHistory' key in the export", payload.matchHistory === undefined);
+    ["players", "seen", "courtCount", "scoringStyle", "matchmakingMode", "sessionName", "sessionDate"].forEach(function (key) {
+      ok("export carries " + key, payload[key] !== undefined);
+    });
+    ok("filename sanitiser strips path characters", cmxSafeName('a/b:c*d?e"f<g>h|i', "x") === "a-b-c-d-e-f-g-h-i");
+    ok("filename sanitiser falls back when blank", cmxSafeName("   ", "CourtMixer") === "CourtMixer");
+
+    out.push("modal nesting");
+    // A modal button that opens a SECOND modal used to have it closed again immediately by
+    // the first modal's auto-close, which is exactly why Export looked like a dead button.
+    (function () {
+      cmxShowModal({ title: "seq-test", bodyHTML: "", buttons: [{ label: "go", cls: "ghost", onClick: function () { cmxAlert("nested"); } }] });
+      const b = document.querySelector(".cmx-modal-btn");
+      if (b) b.click();
+      const overlay = document.getElementById("cmxModal");
+      const stillOpen = overlay && getComputedStyle(overlay).display !== "none";
+      const title = (document.querySelector(".cmx-modal-title") || {}).textContent;
+      ok("a modal opened from a modal handler stays open", !!stillOpen && title === "CourtMixer");
+      cmxCloseModal();
+    })();
+
     recomputeStatsFromHistory();
     const boards = {};
     ["points", "league"].forEach(st => { scoringStyle = st; recomputeStatsFromHistory(); boards[st] = computeLeaderboardData().ranked.map(p => String(computeLeaderboardData().valueFn(p))); });
@@ -4256,6 +4400,60 @@ function runSelfTests(){
   return { pass, fail };
 }
 
+/* ===== Share diagnostics: open with ?sharetest =====
+   Web Share behaviour cannot be reproduced on a desktop browser, so this reports exactly what
+   the phone says rather than leaving it to guesswork. */
+function runShareDiagnostics() {
+  const el = document.createElement("div");
+  el.className = "selftest-out";
+  const lines = [];
+  lines.push("CourtMixer v" + APP_VERSION + " — share diagnostics");
+  lines.push("");
+  lines.push("secure context : " + (window.isSecureContext ? "yes" : "NO (share needs https)"));
+  lines.push("origin         : " + location.origin);
+  lines.push("navigator.share    : " + typeof navigator.share);
+  lines.push("navigator.canShare : " + typeof navigator.canShare);
+  lines.push("");
+  [["application/json", ".json"], ["text/plain", ".txt"]].forEach(function (p) {
+    try {
+      const f = new File([new Blob(["{}"], { type: p[0] })], "probe" + p[1], { type: p[0] });
+      lines.push("canShare files only " + p[1] + " : " + (navigator.canShare ? navigator.canShare({ files: [f] }) : "n/a"));
+      lines.push("canShare files+title " + p[1] + ": " + (navigator.canShare ? navigator.canShare({ files: [f], title: "t" }) : "n/a"));
+    } catch (e) { lines.push(p[1] + " probe threw: " + e.name); }
+  });
+  lines.push("");
+  lines.push("Tap a button to attempt a real share; the result appears below.");
+  el.textContent = lines.join("\n");
+
+  const mk = (label, payload) => {
+    const b = document.createElement("button");
+    b.textContent = label;
+    b.style.cssText = "display:block;margin:8px 0;padding:10px 14px;border-radius:8px;background:#4f6ef7;color:#fff;border:0;font:inherit;";
+    b.onclick = function () {
+      const res = document.createElement("div");
+      try {
+        const p = navigator.share(payload());
+        p.then(function () { res.textContent = "→ " + label + ": RESOLVED (shared)"; })
+         .catch(function (e) { res.textContent = "→ " + label + ": rejected " + (e && e.name) + " — " + (e && e.message); });
+      } catch (e) { res.textContent = "→ " + label + ": threw " + e.name + " — " + e.message; }
+      el.appendChild(res);
+    };
+    el.appendChild(b);
+  };
+  const mkFile = (mime, ext) => new File([new Blob(['{"app":"CourtMixer"}'], { type: mime })], "cmx-test" + ext, { type: mime });
+  mk("share .json (files only)", () => ({ files: [mkFile("application/json", ".json")] }));
+  mk("share .txt (files only)", () => ({ files: [mkFile("text/plain", ".txt")] }));
+  mk("share .json + title", () => ({ files: [mkFile("application/json", ".json")], title: "CourtMixer" }));
+  mk("share text only (no file)", () => ({ title: "CourtMixer", text: "hello" }));
+
+  const close = document.createElement("button");
+  close.textContent = "Close";
+  close.style.cssText = "display:block;margin:14px 0 0;padding:10px 14px;border-radius:8px;background:#64748b;color:#fff;border:0;font:inherit;";
+  close.onclick = () => el.remove();
+  el.appendChild(close);
+  document.body.appendChild(el);
+}
+
 recomputeStatsFromHistory();
 
 renderPlayers();
@@ -4264,6 +4462,7 @@ renderHistory();
 renderLeaderboard();
 renderStats();
 if (/[?#&]selftest/.test(location.search + location.hash)) runSelfTests();
+if (/[?#&]sharetest/.test(location.search + location.hash)) runShareDiagnostics();
 </script>
 </body>
 </html>
