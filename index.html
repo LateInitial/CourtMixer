@@ -791,8 +791,6 @@ button#editModeBtn.active-edit { background:#4f6fff; }
 <button id="saveDefaultBtn" class="secondary">Save as default</button>
 <button id="exportBtn" class="secondary" style="display:none;">Export Roster</button>
 <button id="importBtn" class="secondary" style="display:none;">Import Roster</button>
-<input type="file" id="importFile" style="display:none;" />
-<input type="file" id="importRosterFile" style="display:none;" />
 <button id="editModeBtn" class="secondary">Edit</button>
 <span class="edit-mode-hint">✏️ Editing — update fields above &amp; press Save</span>
 </div>
@@ -979,7 +977,7 @@ button#editModeBtn.active-edit { background:#4f6fff; }
 <script>/*! lz-string MIT */ var LZString=function(){var r=String.fromCharCode,o="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=",n="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+-$",e={};function t(r,o){if(!e[r]){e[r]={};for(var n=0;n<r.length;n++)e[r][r.charAt(n)]=n}return e[r][o]}var i={compressToBase64:function(r){if(null==r)return"";var n=i._compress(r,6,function(r){return o.charAt(r)});switch(n.length%4){default:case 0:return n;case 1:return n+"===";case 2:return n+"==";case 3:return n+"="}},decompressFromBase64:function(r){return null==r?"":""==r?null:i._decompress(r.length,32,function(n){return t(o,r.charAt(n))})},compressToUTF16:function(o){return null==o?"":i._compress(o,15,function(o){return r(o+32)})+" "},decompressFromUTF16:function(r){return null==r?"":""==r?null:i._decompress(r.length,16384,function(o){return r.charCodeAt(o)-32})},compressToUint8Array:function(r){for(var o=i.compress(r),n=new Uint8Array(2*o.length),e=0,t=o.length;e<t;e++){var s=o.charCodeAt(e);n[2*e]=s>>>8,n[2*e+1]=s%256}return n},decompressFromUint8Array:function(o){if(null==o)return i.decompress(o);for(var n=new Array(o.length/2),e=0,t=n.length;e<t;e++)n[e]=256*o[2*e]+o[2*e+1];var s=[];return n.forEach(function(o){s.push(r(o))}),i.decompress(s.join(""))},compressToEncodedURIComponent:function(r){return null==r?"":i._compress(r,6,function(r){return n.charAt(r)})},decompressFromEncodedURIComponent:function(r){return null==r?"":""==r?null:(r=r.replace(/ /g,"+"),i._decompress(r.length,32,function(o){return t(n,r.charAt(o))}))},compress:function(o){return i._compress(o,16,function(o){return r(o)})},_compress:function(r,o,n){if(null==r)return"";var e,t,i,s={},u={},a="",p="",c="",l=2,f=3,h=2,d=[],m=0,v=0;for(i=0;i<r.length;i+=1)if(a=r.charAt(i),Object.prototype.hasOwnProperty.call(s,a)||(s[a]=f++,u[a]=!0),p=c+a,Object.prototype.hasOwnProperty.call(s,p))c=p;else{if(Object.prototype.hasOwnProperty.call(u,c)){if(c.charCodeAt(0)<256){for(e=0;e<h;e++)m<<=1,v==o-1?(v=0,d.push(n(m)),m=0):v++;for(t=c.charCodeAt(0),e=0;e<8;e++)m=m<<1|1&t,v==o-1?(v=0,d.push(n(m)),m=0):v++,t>>=1}else{for(t=1,e=0;e<h;e++)m=m<<1|t,v==o-1?(v=0,d.push(n(m)),m=0):v++,t=0;for(t=c.charCodeAt(0),e=0;e<16;e++)m=m<<1|1&t,v==o-1?(v=0,d.push(n(m)),m=0):v++,t>>=1}0==--l&&(l=Math.pow(2,h),h++),delete u[c]}else for(t=s[c],e=0;e<h;e++)m=m<<1|1&t,v==o-1?(v=0,d.push(n(m)),m=0):v++,t>>=1;0==--l&&(l=Math.pow(2,h),h++),s[p]=f++,c=String(a)}if(""!==c){if(Object.prototype.hasOwnProperty.call(u,c)){if(c.charCodeAt(0)<256){for(e=0;e<h;e++)m<<=1,v==o-1?(v=0,d.push(n(m)),m=0):v++;for(t=c.charCodeAt(0),e=0;e<8;e++)m=m<<1|1&t,v==o-1?(v=0,d.push(n(m)),m=0):v++,t>>=1}else{for(t=1,e=0;e<h;e++)m=m<<1|t,v==o-1?(v=0,d.push(n(m)),m=0):v++,t=0;for(t=c.charCodeAt(0),e=0;e<16;e++)m=m<<1|1&t,v==o-1?(v=0,d.push(n(m)),m=0):v++,t>>=1}0==--l&&(l=Math.pow(2,h),h++),delete u[c]}else for(t=s[c],e=0;e<h;e++)m=m<<1|1&t,v==o-1?(v=0,d.push(n(m)),m=0):v++,t>>=1;0==--l&&(l=Math.pow(2,h),h++)}for(t=2,e=0;e<h;e++)m=m<<1|1&t,v==o-1?(v=0,d.push(n(m)),m=0):v++,t>>=1;for(;;){if(m<<=1,v==o-1){d.push(n(m));break}v++}return d.join("")},decompress:function(r){return null==r?"":""==r?null:i._decompress(r.length,32768,function(o){return r.charCodeAt(o)})},_decompress:function(o,n,e){var t,i,s,u,a,p,c,l=[],f=4,h=4,d=3,m="",v=[],g={val:e(0),position:n,index:1};for(t=0;t<3;t+=1)l[t]=t;for(s=0,a=Math.pow(2,2),p=1;p!=a;)u=g.val&g.position,g.position>>=1,0==g.position&&(g.position=n,g.val=e(g.index++)),s|=(u>0?1:0)*p,p<<=1;switch(s){case 0:for(s=0,a=Math.pow(2,8),p=1;p!=a;)u=g.val&g.position,g.position>>=1,0==g.position&&(g.position=n,g.val=e(g.index++)),s|=(u>0?1:0)*p,p<<=1;c=r(s);break;case 1:for(s=0,a=Math.pow(2,16),p=1;p!=a;)u=g.val&g.position,g.position>>=1,0==g.position&&(g.position=n,g.val=e(g.index++)),s|=(u>0?1:0)*p,p<<=1;c=r(s);break;case 2:return""}for(l[3]=c,i=c,v.push(c);;){if(g.index>o)return"";for(s=0,a=Math.pow(2,d),p=1;p!=a;)u=g.val&g.position,g.position>>=1,0==g.position&&(g.position=n,g.val=e(g.index++)),s|=(u>0?1:0)*p,p<<=1;switch(c=s){case 0:for(s=0,a=Math.pow(2,8),p=1;p!=a;)u=g.val&g.position,g.position>>=1,0==g.position&&(g.position=n,g.val=e(g.index++)),s|=(u>0?1:0)*p,p<<=1;l[h++]=r(s),c=h-1,f--;break;case 1:for(s=0,a=Math.pow(2,16),p=1;p!=a;)u=g.val&g.position,g.position>>=1,0==g.position&&(g.position=n,g.val=e(g.index++)),s|=(u>0?1:0)*p,p<<=1;l[h++]=r(s),c=h-1,f--;break;case 2:return v.join("")}if(0==f&&(f=Math.pow(2,d),d++),l[c])m=l[c];else{if(c!==h)return null;m=i+i.charAt(0)}v.push(m),l[h++]=i+m.charAt(0),i=m,0==--f&&(f=Math.pow(2,d),d++)}}};return i}();"function"==typeof define&&define.amd?define(function(){return LZString}):"undefined"!=typeof module&&null!=module?module.exports=LZString:"undefined"!=typeof angular&&null!=angular&&angular.module("LZString",[]).factory("LZString",function(){return LZString});</script>
 <script>
 /* ===== CourtMixer core helpers ===== */
-const APP_VERSION = "1.8.0";
+const APP_VERSION = "1.8.1";
 function uid() {
   try { if (typeof crypto !== "undefined" && crypto.randomUUID) return crypto.randomUUID(); } catch (e) {}
   var b = null;
@@ -2589,8 +2587,8 @@ const deltas = matchHistory.map(h => Number(h.pairDelta)).filter(v => Number.isF
 const avgDelta = deltas.length ? (deltas.reduce((x, y) => x + y, 0) / deltas.length).toFixed(2) : "n/a";
 stats.innerHTML = `<span>Most played: <strong>${esc(most.name)} (${most.matches})</strong> | Least played: <strong>${esc(least.name)} (${least.matches})</strong> | Avg pair delta: <strong>${avgDelta}</strong></span>${tools}`;
 }
-const histExp = document.getElementById("histExportBtn"); if (histExp) histExp.onclick = () => cmxExportChooser("session");
-const histImp = document.getElementById("histImportBtn"); if (histImp) histImp.onclick = () => cmxImportChooser("session");
+const histExp = document.getElementById("histExportBtn"); if (histExp) histExp.onclick = () => cmxExportText("session");
+const histImp = document.getElementById("histImportBtn"); if (histImp) histImp.onclick = () => cmxImportText("session");
 const saveAllBtn = document.getElementById("saveAllBtn");
 if (saveAllBtn) {
 saveAllBtn.onclick = () => {
@@ -3720,15 +3718,6 @@ function buildSessionPayload(){
   var rosterDefault = (customDefaults && customDefaults.length) ? customDefaults : players.map(function(p){ return { name:p.name, gender:(p.gender==="F"?"F":"M"), skill:p.skill }; });
   return { app:"CourtMixer", type:"session", version:1, exportedAt:new Date().toISOString(), players:players, history:matchHistory, seen:Array.from(seenPairings), courtCount:courtCount, scoringStyle:scoringStyle, matchmakingMode:matchmakingMode, customDefaults:rosterDefault, sessionName:sessionName, sessionDate:sessionDate };
 }
-function exportRosterFile(){
-  cmxSaveFileDialog({
-    title: "Export roster",
-    note: "Saves your players (name, gender, skill). Name the file, then choose where it goes.",
-    defaultName: "CourtMixer-roster-" + (sessionDate || todayISO()),
-    ext: ".json", mime: "application/json",
-    makeBlob: function(){ return new Blob([JSON.stringify(buildRosterPayload(), null, 2)], { type: "application/json" }); }
-  });
-}
 function applyRosterImport(data){
   if(!data || data.app!=="CourtMixer" || !Array.isArray(data.players) || !data.players.length){ cmxAlert("No players found in that roster code/file."); return; }
   const warn = (matchHistory && matchHistory.length)
@@ -3755,11 +3744,6 @@ function doApplyRosterImport(data){
   updateMatchToolbar(); updateDefaultButtons();
   renderPlayers(); renderMatch(); renderHistory(); renderLeaderboard(); renderStats();
 }
-function importRosterFromFile(file){
-  var reader=new FileReader();
-  reader.onload=function(e){ var data; try{ data=JSON.parse(e.target.result); }catch(err){ cmxAlert("That file isn't a CourtMixer roster.\n\nPick the .json or .txt file that CourtMixer exported."); return; } applyRosterImport(data); };
-  reader.readAsText(file);
-}
 function applySessionImport(data){
   if(!data || data.app!=="CourtMixer"){ cmxAlert("That isn't a valid CourtMixer code."); return; }
   if(data.type==="roster"){ cmxAlert("That looks like a roster code. Use Import Roster on the Players tab."); return; }
@@ -3769,9 +3753,13 @@ function _cmxEncode(obj, prefix){ try{ return prefix + LZString.compressToEncode
 function _cmxDecode(text){
   if(!text) return null;
   var s=String(text).trim();
-  var m=s.match(/^CMX[RS]1:/); if(m) s=s.slice(m[0].length);
+  // Find the code wherever it sits. People copy the whole chat message, so there is usually
+  // text before and after it. The body is a run of LZString's URI-safe alphabet, which stops
+  // at the first space or newline and therefore never swallows the words after the code.
+  var m=s.match(/CMX[RS]1:([A-Za-z0-9+\-$]+)/);
+  var body = m ? m[1] : s;
   var out=null;
-  try{ var j=LZString.decompressFromEncodedURIComponent(s); if(j){ out=JSON.parse(j); } }catch(e){ out=null; }
+  try{ var j=LZString.decompressFromEncodedURIComponent(body); if(j){ out=JSON.parse(j); } }catch(e){ out=null; }
   if(out) return out;
   try{ return JSON.parse(s); }catch(e){ return null; }
 }
@@ -3925,125 +3913,40 @@ function cmxCopy(text, box){
   function fail(){ var t=box && box.querySelector("#cmxCodeOut"); if(t){ t.focus(); t.select(); try{ document.execCommand("copy"); done(); return; }catch(e){} } if(msg){ msg.textContent="Press and hold the code to copy it."; msg.className="cmx-copymsg err"; } }
   if(navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(text).then(done).catch(fail); } else { fail(); }
 }
-function cmxSafeName(v, fallback){
-  var n = String(v == null ? "" : v).trim().replace(/[\\/:*?"<>|]+/g, "-").replace(/\s+/g, " ").replace(/^[.\s]+|[.\s]+$/g, "");
-  return n || fallback;
-}
-function cmxDownload(blob, fname){
-  var url = URL.createObjectURL(blob), a = document.createElement("a");
-  a.href = url; a.download = fname;
-  document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(function(){ URL.revokeObjectURL(url); }, 1500);
-}
-// Exports used to fire straight into the Web Share sheet (or a silent download) with a fixed
-// name, which looked like the button doing nothing. Now you always name the file first and
-// pick explicitly where it goes, with a toast either way.
-function cmxSaveFileDialog(opts){
-  var suggested = cmxSafeName(opts.defaultName, "CourtMixer");
-  cmxShowModal({
-    title: opts.title || "Save file",
-    bodyHTML: '<p class="cmx-modal-text">' + esc(opts.note || "Name the file, then choose where it goes.") + '</p>'
-      + '<div class="cmx-namewrap"><input id="cmxFileName" class="cmx-name" type="text" spellcheck="false" autocomplete="off" autocapitalize="off"><span class="cmx-ext">' + esc(opts.ext) + '</span></div>',
-    buttons: (function(){
-      // Send the real .json when the browser allows it; .txt is only a fallback for
-      // platforms that refuse JSON (Chrome on Android shares an allow-listed set of types).
-      function probeType(ext, mime) {
-        try {
-          const f = new File([new Blob(["{}"], { type: mime })], "probe" + ext, { type: mime });
-          return (navigator.canShare && navigator.canShare({ files: [f] })) ? { ext: ext, mime: mime } : null;
-        } catch (e) { return null; }
-      }
-      var shareAs = probeType(opts.ext, opts.mime) || probeType(".txt", "text/plain");
-      var canSend = !!shareAs;
-        var btns = [{ label: "Save to device", cls: "primary", keepOpen: true, onClick: function(box){
-        var nameEl = box.querySelector("#cmxFileName");
-        var fname = cmxSafeName(nameEl && nameEl.value, suggested) + opts.ext;
-        cmxDownload(opts.makeBlob(), fname);
-        cmxCloseModal();
-        showToast("Saved <strong>" + esc(fname) + "</strong> to your downloads.");
-        return false;
-      } }];
-      if (canSend) btns.push({ label: "Send to another device\u2026", cls: "secondary", keepOpen: true, onClick: function(box){
-        var nameEl = box.querySelector("#cmxFileName");
-        var base = cmxSafeName(nameEl && nameEl.value, suggested);
-        var blob = opts.makeBlob();
-        var shareName = base + shareAs.ext;
-        var file = new File([blob], shareName, { type: shareAs.mime });
-        var saveInstead = function (why) {
-          cmxDownload(blob, base + opts.ext);
-          showToast("Your phone would not share that file (" + esc(why) + "), so it is saved in your downloads as <strong>" + esc(base + opts.ext) + "</strong>.");
-        };
-        // share() must be the first thing this gesture does. It needs transient user
-        // activation, and tearing the modal down first can spend it. The payload is also
-        // exactly what canShare() was probed with -- adding title/text to a file share is
-        // enough for some builds to reject it outright.
-        var p;
-        try {
-          p = navigator.share({ files: [file] });
-        } catch (err) {
-          cmxCloseModal();
-          saveInstead((err && err.name) || "refused");
-          return false;
-        }
-        cmxCloseModal();
-        p.then(function () {
-          showToast("Sent <strong>" + esc(shareName) + "</strong>. Open it with Import on the other device.");
-        }).catch(function (err) {
-          var name = (err && err.name) || "unknown";
-          // AbortError is the only one that genuinely means "the user backed out". Anything
-          // else is the browser refusing, and must not be reported as a cancellation.
-          if (name === "AbortError") { showToast("Sharing cancelled."); return; }
-          saveInstead(name);
-        });
-        return false;
-      } });
-      btns.push({ label: "Cancel", cls: "ghost", onClick: function(){} });
-      return btns;
-    })(),
-    onOpen: function(box){
-      var inp = box.querySelector("#cmxFileName");
-      if (!inp) return;
-      inp.value = suggested;
-      setTimeout(function(){ try { inp.focus(); inp.select(); } catch (e) {} }, 40);
-    }
-  });
-}
-function cmxExportChooser(kind){
-  var isRoster = kind==="roster";
-  cmxShowModal({ title: isRoster?"Export roster":"Export history",
-    bodyHTML:'<p class="cmx-modal-text">Choose how to share '+(isRoster?"your roster":"this session")+'.</p>'+'<p class="cmx-modal-text" style="margin:6px 0 0;font-size:12px;">Sending a file is quickest. If your phone refuses to share it, <strong>Export as text</strong> gives you a code you can paste into any chat.</p>',
-    buttons:[
-      { label:"Export as text", cls:"primary", onClick:function(){ cmxExportText(kind); return false; } },
-      { label:"Export as file", cls:"secondary", onClick:function(){ if(isRoster) exportRosterFile(); else exportBackup(); } },
-      { label:"Cancel", cls:"ghost", onClick:function(){} }
-    ] });
-}
 function cmxExportText(kind){
   var isRoster = kind==="roster";
   var obj = isRoster ? buildRosterPayload() : buildSessionPayload();
   var code = _cmxEncode(obj, isRoster?"CMXR1:":"CMXS1:");
+  var what = isRoster ? "CourtMixer roster" : "CourtMixer session";
+  var canShareText = typeof navigator.share === "function";
+  var buttons = [
+    { label:"Copy code", cls:"primary", keepOpen:true, onClick:function(box){ cmxCopy(code, box); return false; } }
+  ];
+  if (canShareText) buttons.push({ label:"Share code", cls:"secondary", keepOpen:true, onClick:function(box){
+    // Text-only share, no files: this is the one shape phones reliably accept.
+    var p;
+    try { p = navigator.share({ title: what, text: code }); }
+    catch (err) { var m1 = box.querySelector("#cmxCopyMsg"); if (m1) { m1.textContent = "Couldn't open the share sheet \u2014 use Copy code."; m1.className = "cmx-copymsg err"; } return false; }
+    p.then(function(){ cmxCloseModal(); showToast("Code shared \u2014 the other person pastes it into <strong>Import</strong>."); })
+     .catch(function(err){
+       var m2 = box.querySelector("#cmxCopyMsg");
+       if (!m2) return;
+       if (err && err.name === "AbortError") { m2.textContent = "Sharing cancelled."; m2.className = "cmx-copymsg"; return; }
+       m2.textContent = "Couldn't share (" + ((err && err.name) || "unknown") + ") \u2014 use Copy code.";
+       m2.className = "cmx-copymsg err";
+     });
+    return false;
+  } });
+  buttons.push({ label:"Close", cls:"ghost", onClick:function(){} });
   cmxShowModal({ title: isRoster?"Roster code":"Session code",
-    bodyHTML:'<p class="cmx-modal-text">Copy this code and send it. The other person opens '+(isRoster?"Import Roster":"Import History")+' → Import text.</p><textarea id="cmxCodeOut" class="cmx-code" readonly rows="5"></textarea><div id="cmxCopyMsg" class="cmx-copymsg"></div>',
-    buttons:[
-      { label:"Copy code", cls:"primary", keepOpen:true, onClick:function(box){ cmxCopy(code, box); return false; } },
-      { label:"Close", cls:"ghost", onClick:function(){} }
-    ],
+    bodyHTML:'<p class="cmx-modal-text">Send this code to the other person. They open <strong>'+(isRoster?"Import Roster":"Import History")+'</strong> and paste it.</p><textarea id="cmxCodeOut" class="cmx-code" readonly rows="5"></textarea><div id="cmxCopyMsg" class="cmx-copymsg"></div>',
+    buttons: buttons,
     onOpen:function(box){ var t=box.querySelector("#cmxCodeOut"); if(t) t.value=code; } });
-}
-function cmxImportChooser(kind){
-  var isRoster = kind==="roster";
-  cmxShowModal({ title: isRoster?"Import roster":"Import history",
-    bodyHTML:'<p class="cmx-modal-text">Choose how to import.</p>',
-    buttons:[
-      { label:"Import text", cls:"primary", onClick:function(){ cmxImportText(kind); return false; } },
-      { label:"Import file", cls:"secondary", onClick:function(){ var fi=document.getElementById(isRoster?"importRosterFile":"importFile"); if(fi) fi.click(); } },
-      { label:"Cancel", cls:"ghost", onClick:function(){} }
-    ] });
 }
 function cmxImportText(kind){
   var isRoster = kind==="roster";
   cmxShowModal({ title: isRoster?"Paste roster code":"Paste session code",
-    bodyHTML:'<p class="cmx-modal-text">Paste the code below, then press Paste code.</p><textarea id="cmxCodeIn" class="cmx-code" rows="5" placeholder="Paste code here"></textarea><div id="cmxImportMsg" class="cmx-copymsg"></div>',
+    bodyHTML:'<p class="cmx-modal-text">Paste the code, then press <strong>Paste code</strong>. Copying the whole chat message is fine \u2014 any text around the code is ignored.</p><textarea id="cmxCodeIn" class="cmx-code" rows="5" placeholder="Paste code here"></textarea><div id="cmxImportMsg" class="cmx-copymsg"></div>',
     buttons:[
       { label:"Paste code", cls:"primary", keepOpen:true, onClick:function(box){
           var t=box.querySelector("#cmxCodeIn"); var txt=t?t.value:""; var msg=box.querySelector("#cmxImportMsg");
@@ -4055,32 +3958,6 @@ function cmxImportText(kind){
         } },
       { label:"Cancel", cls:"ghost", onClick:function(){} }
     ] });
-}
-
-function exportBackup() {
-const rosterDefault = (customDefaults && customDefaults.length)
-? customDefaults
-: players.map(p => ({ name: p.name, gender: (p.gender === "F" ? "F" : "M"), skill: p.skill }));
-// The key MUST stay "history": renaming the variable to matchHistory in v1.6.0 silently
-// changed this shorthand key, so exported backups no longer round-tripped through import.
-const data = { app: "CourtMixer", type: "session", version: 1, exportedAt: new Date().toISOString(), players, history: matchHistory, seen: Array.from(seenPairings), courtCount, scoringStyle, matchmakingMode, customDefaults: rosterDefault, sessionName, sessionDate };
-cmxSaveFileDialog({
-title: "Export history",
-note: "Saves this whole session \u2014 players, matches, scores and settings. Name the file, then choose where it goes.",
-defaultName: "CourtMixer-backup-" + (sessionDate || todayISO()),
-ext: ".json", mime: "application/json",
-makeBlob: function(){ return new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }); }
-});
-}
-
-function importBackup(file) {
-const reader = new FileReader();
-reader.onload = (e) => {
-let data;
-try { data = JSON.parse(e.target.result); } catch (err) { cmxAlert("That file isn't a CourtMixer backup.\n\nPick the .json or .txt file that CourtMixer exported \u2014 not a photo or a shared leaderboard."); return; }
-applyBackupData(data);
-};
-reader.readAsText(file);
 }
 
 // A backup can be hand-edited or come from an older build; a malformed match entry used to
@@ -4178,12 +4055,8 @@ showToast("Saved \u2014 Reset Data will now restore this roster.");
 });
 };
 
-document.getElementById("exportBtn").onclick = () => cmxExportChooser("roster");
-document.getElementById("importBtn").onclick = () => cmxImportChooser("roster");
-const _impFile = document.getElementById("importFile");
-if (_impFile) _impFile.addEventListener("change", (e) => { const f = e.target.files && e.target.files[0]; if (f) importBackup(f); e.target.value = ""; });
-const _impRosterFile = document.getElementById("importRosterFile");
-if (_impRosterFile) _impRosterFile.addEventListener("change", (e) => { const f = e.target.files && e.target.files[0]; if (f) importRosterFromFile(f); e.target.value = ""; });
+document.getElementById("exportBtn").onclick = () => cmxExportText("roster");
+document.getElementById("importBtn").onclick = () => cmxImportText("roster");
 
 setGenderUI("M");
 updateDefaultButtons();
@@ -4339,8 +4212,19 @@ function runSelfTests(){
     ["players", "seen", "courtCount", "scoringStyle", "matchmakingMode", "sessionName", "sessionDate"].forEach(function (key) {
       ok("export carries " + key, payload[key] !== undefined);
     });
-    ok("filename sanitiser strips path characters", cmxSafeName('a/b:c*d?e"f<g>h|i', "x") === "a-b-c-d-e-f-g-h-i");
-    ok("filename sanitiser falls back when blank", cmxSafeName("   ", "CourtMixer") === "CourtMixer");
+    // Export is code-only now, so pin the code round-trip instead of a filename helper.
+    const rtCode = _cmxEncode(buildSessionPayload(), "CMXS1:");
+    const rtBack = _cmxDecode(rtCode);
+    ok("session code round-trips", !!rtBack && Array.isArray(rtBack.history));
+    eq("code keeps every match", rtBack.history.length, matchHistory.length);
+    ok("code survives surrounding chat text", (function () {
+      const d = _cmxDecode("Here you go!\n\n" + rtCode + "\n\nsee you Friday");
+      return !!d && d.app === "CourtMixer";
+    })());
+    ok("raw exported JSON also pastes in", (function () {
+      const d = _cmxDecode(JSON.stringify(buildSessionPayload()));
+      return !!d && d.app === "CourtMixer";
+    })());
 
     out.push("modal nesting");
     // A modal button that opens a SECOND modal used to have it closed again immediately by
