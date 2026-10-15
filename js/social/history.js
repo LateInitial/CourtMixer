@@ -7,7 +7,7 @@ const stats = document.getElementById("stats");
 if (!stats) return;
 // The Export/Import tools live here, so they must render even with an empty roster --
 // otherwise a fresh install has no way to restore a saved session.
-const tools = `<span style="margin-left:auto;display:inline-flex;gap:8px;align-items:center;flex-wrap:wrap;"><button id="histExportBtn" class="small secondary" title="Export a backup" style="padding:6px 12px;font-size:12px;">Export History</button><button id="histImportBtn" class="small secondary" title="Import a backup" style="padding:6px 12px;font-size:12px;">Import History</button>${matchHistory.some(h => h.scoreA === null) ? `<button id="saveAllBtn" class="small save-btn" title="Save every score you have entered below" style="padding:6px 12px;font-size:12px;">Save Scores</button>` : ""}</span>`;
+const tools = `<span style="margin-left:auto;display:inline-flex;gap:8px;align-items:center;flex-wrap:wrap;"><button id="histExportBtn" class="small secondary" title="Export a backup" style="padding:6px 12px;font-size:12px;">Export History</button><button id="histImportBtn" class="small secondary" title="Import a backup" style="padding:6px 12px;font-size:12px;">Import History</button>${(typeof Sync !== "undefined" && Sync.visible()) ? `<button id="histSyncBtn" class="small secondary" title="Cloud sync" style="padding:6px 12px;font-size:12px;">${esc(Sync.statusText())}</button>` : ""}${matchHistory.some(h => h.scoreA === null) ? `<button id="saveAllBtn" class="small save-btn" title="Save every score you have entered below" style="padding:6px 12px;font-size:12px;">Save Scores</button>` : ""}</span>`;
 if (!players.length) {
 stats.innerHTML = `<span>No players yet &mdash; add some above, or use <strong>Import History</strong> to restore a saved session.</span>${tools}`;
 } else {
@@ -19,6 +19,7 @@ stats.innerHTML = `<span>Most played: <strong>${esc(most.name)} (${most.matches}
 }
 const histExp = document.getElementById("histExportBtn"); if (histExp) histExp.onclick = () => cmxExportText("session");
 const histImp = document.getElementById("histImportBtn"); if (histImp) histImp.onclick = () => cmxImportText("session");
+const histSync = document.getElementById("histSyncBtn"); if (histSync) histSync.onclick = () => SyncUI.open();
 const saveAllBtn = document.getElementById("saveAllBtn");
 if (saveAllBtn) {
 saveAllBtn.onclick = () => {

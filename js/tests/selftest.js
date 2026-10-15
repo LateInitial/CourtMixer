@@ -199,9 +199,9 @@ function runSelfTests(){
     eq("comp doc stored under courtmixer_comp_<id>", Store.getJSON("courtmixer_comp_t1", {}).id, "t1");
     eq("list has social and the comp", Docs.list(), ["social", "comp:t1"]);
     eq("missing comp -> null", Docs.get("comp:none"), null);
-    eq("meta defaults", Docs.meta("comp:t1"), { updatedAt: 0, localVersion: 0, serverVersion: 0, dirty: false });
+    eq("meta defaults", Docs.meta("comp:t1"), { updatedAt: 0, localVersion: 0, serverVersion: 0, dirty: false, deleted: false, hash: "" });
     Docs.setMeta("comp:t1", { dirty: true, localVersion: 2 });
-    eq("setMeta merges", Docs.meta("comp:t1"), { updatedAt: 0, localVersion: 2, serverVersion: 0, dirty: true });
+    eq("setMeta merges", Docs.meta("comp:t1"), { updatedAt: 0, localVersion: 2, serverVersion: 0, dirty: true, deleted: false, hash: "" });
     ok("remove comp doc", Docs.remove("comp:t1") && Docs.get("comp:t1") === null && Docs.meta("comp:t1").dirty === false);
     ok("social doc cannot be removed", Docs.remove("social") === false);
   } finally { Store._useBackend(_realBackend); }
@@ -967,6 +967,25 @@ function runSelfTests(){
     const twoD = CompStandings.derive(TWO), twoAw = CompFacts.awards(TWO, twoD);
     ok("awards know which division they were won in (one image per division)", twoAw.length > 0 && twoAw.filter(a => a.who[0].kind === "match").every(a =>
       eq0(CompFacts.awardDivisions(TWO, twoD, a), [TWO.matches.find(x => x.id === a.who[0].id).divisionId])) && twoAw.filter(a => a.scope).every(a => CompFacts.awardDivisions(TWO, twoD, a)[0] === a.scope));
+
+    out.push("cloud sync (offline parts)");
+    const codes = Array.from({ length: 50 }, () => Sync.generate());
+    ok("sync codes: 20 Crockford characters, all different", codes.every(c => Sync.valid(c) && c.length === 20 && !/[ILOU]/.test(c)) && new Set(codes).size === 50);
+    eq("sync code shown in 5 groups of 4", Sync.format("7K3MQX9PAB12CD34EF56"), "7K3M-QX9P-AB12-CD34-EF56");
+    eq("typed codes are normalised (case, spaces, dashes, O/I/L)", Sync.normalise(" 7k3m-qx9p ab12 cd34 ef5o "), "7K3MQX9PAB12CD34EF50");
+    eq("I and L read as 1", Sync.normalise("il"), "11");
+    ok("wrong codes are refused", !Sync.valid("7K3MQX9PAB12CD34EF5") && !Sync.valid("7K3MQX9PAB12CD34EF5U"));
+    const metaBefore = JSON.stringify(Docs.allMeta());
+    Sync.markDirty("social"); Sync.markDirty("comp:abc"); Sync.markDeleted("comp:abc", 3);
+    eq("sync off: nothing is recorded (social storage stays as before)", JSON.stringify(Docs.allMeta()), metaBefore);
+    ok("no sync server and sync off: nothing is shown", Sync.isOn() || Sync.available !== false || !Sync.visible());
+    const PS = dynComp(4, { type: "roundRobin" }); CompStore.save(PS); CompStore.flush();
+    const held = CompStore.load(PS.id), incoming = JSON.parse(JSON.stringify(PS)); incoming.name = "From the cloud";
+    CompStore.putSynced(incoming);
+    ok("a cloud copy updates the competition in place (open screens keep working)", held.name === "From the cloud" && CompStore.load(PS.id) === held);
+    const tx = SyncUI.buildTransfer(), txData = JSON.parse(LZString.decompressFromEncodedURIComponent(tx.slice(6)));
+    ok("moving sites: one CMXT1 code holds the social session and every competition", tx.indexOf("CMXT1:") === 0 && txData.type === "transfer" && txData.social && txData.social.app === "CourtMixer" &&
+      txData.competitions.length === CompStore.list().length && txData.competitions.every(d => CompShare.safe(d)));
 
     out.push("use recommended, then generate");
     const ur = CompModel.newCompetition({ name: "Rec" });

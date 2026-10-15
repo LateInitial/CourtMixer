@@ -190,5 +190,6 @@ renderHistory();
 renderLeaderboard();
 renderStats();
 CompShell.init();
+SyncUI.init(); // cloud sync (Phase 7): hidden unless the sync server answers or sync is on
 if (/[?#&]selftest/.test(location.search + location.hash)) runSelfTests();
 if (/[?#&]sharetest/.test(location.search + location.hash)) runShareDiagnostics();

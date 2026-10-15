@@ -1,0 +1,16 @@
+# Files Cloudflare must not publish as part of the site (the app is everything else in the repo root)
+.git
+.github
+.gitignore
+.assetsignore
+.wrangler
+node_modules
+worker
+migrations
+tools
+wrangler.jsonc
+package.json
+package-lock.json
+*.md
+/*.png
+.dev.vars

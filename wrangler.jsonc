@@ -1,0 +1,30 @@
+// CourtMixer on Cloudflare Workers (spec §16.1): one Worker serves the static app from the repo
+// root and the cloud-sync API under /api/*. See README "Hosting on Cloudflare".
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "courtmixer",
+  "main": "worker/index.js",
+  "compatibility_date": "2026-09-01",
+  "assets": {
+    "directory": ".",
+    "binding": "ASSETS",
+    "not_found_handling": "404-page",
+    // only the API runs the Worker; every other request is a static file
+    "run_worker_first": ["/api/*"]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "courtmixer",
+      // from Cloudflare dashboard > Storage & databases > D1 > courtmixer
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "migrations"
+    }
+  ],
+  // 120 API requests per minute per IP (free-plan rate-limit binding; the Worker works without it)
+  "ratelimits": [
+    { "name": "API_LIMITER", "namespace_id": "1701", "simple": { "limit": 120, "period": 60 } }
+  ],
+  "observability": { "enabled": true }
+  // SYNC_PEPPER is a secret: dashboard > Workers > courtmixer > Settings > Variables and secrets
+}

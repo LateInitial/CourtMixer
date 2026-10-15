@@ -321,10 +321,12 @@ const CompShell = (function () {
     if (CompStore.list().length) items.push({ label: t("menu.switch"), cls: "secondary", onClick: showSwitch });
     items.push({ label: t("menu.new"), cls: "secondary", onClick: startNew });
     items.push({ label: t("menu.import"), cls: "secondary", onClick: function () { CompShare.showImport(function () { render(); }); } });
+    if (Sync.visible()) items.push({ label: t("sync.menu"), cls: "secondary", onClick: function () { setTimeout(SyncUI.open, 0); } });
     if (comp) items.push({ label: t("menu.archive"), cls: "secondary", onClick: archive });
     if (comp) items.push({ label: t("menu.delete"), cls: "danger", onClick: remove });
     items.push({ label: t("wiz.close"), cls: "ghost", onClick: function () {} });
-    cmxShowModal({ title: t("menu.title"), bodyHTML: comp ? cmxMsgHtml((comp.name || t("comp.untitled")) + " · " + statusLine(comp)) : "", buttons: items });
+    const syncLine = Sync.visible() ? '<p class="cmx-modal-text muted">☁️ ' + esc(Sync.statusText()) + "</p>" : "";
+    cmxShowModal({ title: t("menu.title"), bodyHTML: (comp ? cmxMsgHtml((comp.name || t("comp.untitled")) + " · " + statusLine(comp)) : "") + syncLine, buttons: items });
   }
 
   function setMode(m) {

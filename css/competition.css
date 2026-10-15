@@ -218,3 +218,15 @@
 /* long division names wrap instead of widening the page (competition only; social is unchanged) */
 .comp-seg, .wiz-seg { flex-wrap: wrap; max-width: 100%; }
 .comp-seg .court-segment, .wiz-seg .court-segment { min-width: 0; max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
+
+/* ===== Cloud sync (Phase 7) ===== */
+.sync-code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 20px; font-weight: 800; letter-spacing: .04em; text-align: center; padding: 10px; background: #f5f8ff; border: 1px solid #d8e3ff; border-radius: 10px; margin: 6px 0 10px; overflow-wrap: anywhere; color: #1b2340; }
+.sync-qr { display: flex; justify-content: center; margin: 4px 0 8px; }
+.sync-qr svg { width: 180px; height: 180px; }
+.sync-link { font-size: 12px; color: #4f6fff; overflow-wrap: anywhere; background: #f8faff; border: 1px solid #e1e9ff; border-radius: 8px; padding: 8px; }
+.sync-tick { display: flex; gap: 8px; align-items: center; margin-top: 12px; font-weight: 600; min-height: 40px; }
+.sync-tick input { width: 20px; height: 20px; }
+.sync-hint { margin-top: 2px; }
+.move-banner { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 8px 0; }
+.move-banner span { flex: 1 1 180px; }
+.move-x { background: none; border: 0; font-size: 20px; color: #8d5f1f; min-width: 40px; min-height: 40px; cursor: pointer; }

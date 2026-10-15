@@ -90,12 +90,32 @@ const CompStore = (function () {
   }
 
   function remove(id) {
+    const synced = Docs.valid("comp:" + id) ? Docs.meta("comp:" + id).serverVersion : 0;   // before Docs.remove drops it
     delete pending[id]; delete cache[id];
     index = loadIndex().filter(e => e.id !== id);
     // Docs.remove also drops the document's sync metadata.
     if (Docs.valid("comp:" + id)) Docs.remove("comp:" + id); else Store.remove(PREFIX + id);
     if (!Store.setJSON(INDEX_KEY, index)) warnBlocked();
     if (getActiveId() === id) setActive(null);
+    if (typeof Sync !== "undefined" && Sync.markDeleted) Sync.markDeleted("comp:" + id, synced); // the cloud copy goes too
+  }
+
+  // A copy that arrived from cloud sync (Phase 7). The document in memory is updated in place, so a
+  // screen holding it (score sheet, settings) keeps working on the current version. Written at
+  // once and not reported back to sync as a change.
+  function putSynced(doc) {
+    const cur = cache[doc.id];
+    if (cur && cur !== doc) { Object.keys(cur).forEach(k => { delete cur[k]; }); Object.assign(cur, doc); }
+    else cache[doc.id] = doc;
+    const d = cache[doc.id];
+    const idx = loadIndex(), entry = CompModel.indexEntry(d);
+    const i = idx.findIndex(e => e.id === d.id);
+    if (i === -1) idx.push(entry); else idx[i] = entry;
+    delete pending[d.id];
+    let ok = Store.setJSON(PREFIX + d.id, d);
+    if (!Store.setJSON(INDEX_KEY, idx)) ok = false;
+    if (!ok) warnBlocked();
+    return d;
   }
 
   // Puts a document back exactly as it was (used by undo).
@@ -116,6 +136,6 @@ const CompStore = (function () {
     document.addEventListener("visibilitychange", function () { if (document.visibilityState === "hidden") flush(); });
   }
 
-  return { getMode, setMode, list, load, getActiveId, getActive, setActive, save, flush, remove, restore, _reset,
+  return { getMode, setMode, list, load, getActiveId, getActive, setActive, save, flush, remove, restore, putSynced, _reset,
     KEYS: { MODE_KEY, INDEX_KEY, ACTIVE_KEY, PREFIX } };
 })();

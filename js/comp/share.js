@@ -613,5 +613,5 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:Inter,'Segoe UI'
     cmxShowModal({ title: t("share.title"), bodyHTML: cmxMsgHtml(t("share.text") + (nDiv > 8 ? "\n\n" + t("share.tooMany") : "")), buttons });
   }
 
-  return { encode, decode, payload, showExport, showImport, place, buildViewer, drawImage, showShare, shareImage, shareHtml };
+  return { safe: safeDoc, encode, decode, payload, showExport, showImport, place, buildViewer, drawImage, showShare, shareImage, shareHtml };
 })();

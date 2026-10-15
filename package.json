@@ -1,0 +1,14 @@
+{
+  "name": "courtmixer",
+  "private": true,
+  "description": "CourtMixer: the app is plain static files; this only drives the Cloudflare Worker and its tests.",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "db:local": "wrangler d1 migrations apply courtmixer --local",
+    "db:remote": "wrangler d1 migrations apply courtmixer --remote"
+  },
+  "devDependencies": {
+    "wrangler": "4.151.0"
+  }
+}

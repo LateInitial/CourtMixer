@@ -145,7 +145,9 @@ const Docs = (function () {
       updatedAt: Number(m.updatedAt) || 0,
       localVersion: Number(m.localVersion) || 0,
       serverVersion: Number(m.serverVersion) || 0,
-      dirty: !!m.dirty
+      dirty: !!m.dirty,
+      deleted: !!m.deleted,
+      hash: typeof m.hash === "string" ? m.hash : ""
     };
   }
   // For the sync client (Phase 7): merge fields into a doc's metadata.
@@ -156,5 +158,13 @@ const Docs = (function () {
     return Store.setJSON(META_KEY, all);
   }
 
-  return { list, get, put, remove, meta, setMeta, valid };
+  // For the sync client: forget a doc's metadata (after its cloud copy is deleted).
+  function dropMeta(docKey) {
+    const all = readMeta();
+    if (all[docKey]) { delete all[docKey]; return Store.setJSON(META_KEY, all); }
+    return true;
+  }
+  function allMeta() { return readMeta(); }
+
+  return { list, get, put, remove, meta, setMeta, dropMeta, allMeta, valid };
 })();
