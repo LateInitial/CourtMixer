@@ -8,7 +8,7 @@ const CompFacts = (function () {
   // One record per finished match that was actually played (walkovers and void meetings left out).
   function collect(comp, D) {
     const out = [];
-    comp.matches.forEach(function (x) {
+    comp.matches.forEach(function (x, idx) {
       if (x.status !== "done" || !x.winner || x.outcome === "walkover") return;
       const m = D.meetingById[x.meetingId];
       if (!m || D.outcome(m).kind === "void") return;
@@ -23,21 +23,44 @@ const CompFacts = (function () {
         sideId: { A: D.side(m, "A"), B: D.side(m, "B") },   // entry id (pairs) or team id (teams)
         players: { A: D.playerIdsOf(x, "A"), B: D.playerIdsOf(x, "B") },
         games: { A: tl.gamesA, B: tl.gamesB }, sets: { A: tl.setsA, B: tl.setsB },
-        margin: Math.abs(tl.gamesA - tl.gamesB), total: tl.gamesA + tl.gamesB,
+        // signed: the winner's points/games minus the loser's (a winner can score fewer in total)
+        margin: x.winner === "B" ? tl.gamesB - tl.gamesA : tl.gamesA - tl.gamesB, total: tl.gamesA + tl.gamesB,
+        retired: x.outcome === "retired", idx,
         multi: f.setType !== "totalPoints" && f.sets > 1 && sets.length > 1,
         deciding: f.setType !== "totalPoints" && f.sets > 1 && sets.length === f.sets,
-        comeback: f.setType !== "totalPoints" && f.sets > 1 && sets.length > 1 && (x.winner === "A" || x.winner === "B") && firstW && firstW !== x.winner,
+        comeback: x.outcome !== "retired" && f.setType !== "totalPoints" && f.sets > 1 && sets.length > 1 && (x.winner === "A" || x.winner === "B") && firstW && firstW !== x.winner,
         firstDeficit: first ? Math.abs(first.a - first.b) : 0,
         at: x.endedAt || x.startedAt || 0, order: x.order || 0
       });
     });
     // oldest first, so "latest" picks are stable
-    out.sort((a, b) => (a.at - b.at) || (a.m.round - b.m.round) || (a.order - b.order));
+    out.sort((a, b) => (a.at - b.at) || (a.m.round - b.m.round) || (a.order - b.order) || (a.idx - b.idx));
     return out;
   }
+  // Conceded walkovers: they are losses for "unbeaten" and "won all" claims, though nothing was played.
+  function walkoverLosses(comp, D) {
+    const lost = {};
+    const mark = (id) => { if (id) lost[id] = true; };
+    comp.matches.forEach(function (x) {
+      if (x.status !== "done" || x.outcome !== "walkover" || (x.winner !== "A" && x.winner !== "B")) return;
+      const m = D.meetingById[x.meetingId];
+      if (!m || D.outcome(m).kind === "void") return;
+      const ls = x.winner === "A" ? "B" : "A";
+      D.playerIdsOf(x, ls).forEach(mark);
+      mark(pairKey(comp, D.playerIdsOf(x, ls)));
+      const sideId = D.side(m, ls);
+      if (sideId && sideId !== "BYE") { mark(sideId); mark(sideId + "@" + (x.divisionId || "")); }
+    });
+    return lost;
+  }
   const decided = (r) => r.winner === "A" || r.winner === "B";
+  const fair = (r) => decided(r) && !r.retired;   // a finished, decided match (not a retirement)
   const other = (s) => (s === "A" ? "B" : "A");
-  const pairKey = (ids) => ids.slice().sort().join("+");
+  // a pair's key, by roster order (ids are rewritten in export codes, positions aren't)
+  function pairKey(comp, ids) {
+    const pos = (id) => { const i = comp.players.findIndex(p => p.id === id); return i === -1 ? 1e9 : i; };
+    return ids.slice().sort((a, b) => pos(a) - pos(b)).join("+");
+  }
 
   function unitOf(comp) {
     const f = (comp.settings.matchFormats || {}).main;
@@ -46,7 +69,7 @@ const CompFacts = (function () {
   function playerName(comp, id) { const p = comp.players.find(x => x.id === id); return p ? p.name : "?"; }
   function pairName(comp, ids) { return ids.map(id => playerName(comp, id)).join(" & "); }
   // the score as the given side saw it ("4–2" for the winner, not "2–4")
-  function scoreText(r, side) { return (r.x.sets || []).map(s => side === "B" ? s.b + "–" + s.a : s.a + "–" + s.b).join(", "); }
+  function scoreText(r, side) { return esc((r.x.sets || []).map(s => side === "B" ? s.b + "–" + s.a : s.a + "–" + s.b).join(", ")); }
   // "Ann / Ben" (pairs entry), team name, or the two players' names
   function sideName(comp, D, r, s) {
     if (D.isTeams) return pairName(comp, r.players[s]);
@@ -65,7 +88,7 @@ const CompFacts = (function () {
           const p = get(P, id); p.played++; if (won) p.won++; p.gamesFor += gf; p.gamesAgainst += ga; if (close) p.clutch++;
         });
         if (r.players[s].length) {
-          const k = pairKey(r.players[s]), pr = get(PR, k, { ids: r.players[s].slice().sort(), division: r.division, team: D.isTeams ? r.sideId[s] : null });
+          const k = pairKey(comp, r.players[s]), pr = get(PR, k, { ids: k.split("+"), division: r.division, team: D.isTeams ? r.sideId[s] : null });
           pr.played++; if (won) pr.won++; pr.gamesFor += gf; pr.gamesAgainst += ga;
         }
         const id = r.sideId[s];
@@ -82,7 +105,8 @@ const CompFacts = (function () {
     return tie ? null : best;
   }
   function seedOf(comp, D) {
-    const key = comp.matches.filter(x => x.status === "done").map(x => x.id + ":" + (x.sets || []).map(s => s.a + "-" + s.b).join(",") + ":" + x.winner).join("|");
+    // positions and scores, not ids: a competition imported from a code shows the same facts
+    const key = comp.matches.map((x, i) => x.status === "done" ? i + ":" + (x.sets || []).map(s => s.a + "-" + s.b).join(",") + ":" + x.winner : "").filter(Boolean).join("|");
     return hashString(comp.id + "|" + (key || "empty"));
   }
 
@@ -92,22 +116,23 @@ const CompFacts = (function () {
     POINTS_MACHINE: 3, UPSET: 4, RESERVE_HERO: 4, TEAM_SPIRIT: 4, UNBEATEN_PLAYER: 4 };
 
   function catalogue(comp, D, recs, rnd) {
-    const facts = [], unit = unitOf(comp), T = tallies(comp, D, recs);
+    const facts = [], unit = unitOf(comp), T = tallies(comp, D, recs), woLost = walkoverLosses(comp, D);
+    const gone = (id) => { const e = D.entryById[id] || D.teamById[id]; return !!(e && e.withdrawn); };
     const add = (code, kind, emoji, html, subjects, teams) => facts.push({ code, kind, emoji, html, subjects: subjects || [], teams: teams || [], weight: WEIGHT[code] || 1 });
     const pick = (list) => list[Math.floor(rnd() * list.length)];
 
     // UNBEATEN pairs: won every match, at least 3
     Object.keys(T.PR).forEach(function (k) {
       const pr = T.PR[k];
-      if (pr.played >= 3 && pr.won === pr.played) {
-        const entry = !D.isTeams && comp.entries.find(e => pairKey(e.playerIds) === k);
+      const entry = !D.isTeams && comp.entries.find(e => pairKey(comp, e.playerIds) === k);
+      if (pr.played >= 3 && pr.won === pr.played && !woLost[k] && !(entry && (woLost[entry.id] || gone(entry.id))) && !(pr.team && gone(pr.team))) {
         add("UNBEATEN", "pair", "\u{1F6E1}️", t("fact.unbeaten", { name: nm(entry ? entry.label : pairName(comp, pr.ids)), n: pr.won }), pr.ids, pr.team ? [pr.team] : []);
       }
     });
     // teams: a player who won every match (with any partner), at least 3
     if (D.isTeams) Object.keys(T.P).forEach(function (id) {
       const p = T.P[id];
-      if (p.played >= 3 && p.won === p.played && !Object.keys(T.PR).some(k => T.PR[k].ids.indexOf(id) !== -1 && T.PR[k].played === p.played)) {
+      if (p.played >= 3 && p.won === p.played && !woLost[id] && !Object.keys(T.PR).some(k => T.PR[k].ids.indexOf(id) !== -1 && T.PR[k].played === p.played)) {
         add("UNBEATEN_PLAYER", "player", "\u{1F6E1}️", t("fact.unbeatenPlayer", { name: nm(playerName(comp, id)), n: p.won }), [id]);
       }
     });
@@ -115,23 +140,23 @@ const CompFacts = (function () {
     const clutch = uniqueTop(Object.keys(T.P).filter(id => T.P[id].clutch >= 2), id => T.P[id].clutch);
     if (clutch) add("CLUTCH", "player", "\u{1F9CA}", t("fact.clutch", { name: nm(playerName(comp, clutch)), n: T.P[clutch].clutch }), [clutch]);
     // COMEBACK: won after losing the first set/game
-    const backs = recs.filter(r => r.comeback);
+    const backs = recs.filter(r => r.comeback && fair(r));
     if (backs.length) {
       const r = backs.slice().sort((a, b) => b.firstDeficit - a.firstDeficit)[0];
       add("COMEBACK", "pair", "\u{1F525}", t("fact.comeback", { name: nm(sideName(comp, D, r, r.winner)), score: scoreText(r, r.winner) }), r.players[r.winner], D.isTeams ? [r.sideId[r.winner]] : []);
     }
     // BIG_WIN: largest margin, at least 40% of the target
-    const bigCands = recs.filter(r => decided(r) && r.margin >= 0.4 * (r.f.target || 21));
+    const bigCands = recs.filter(r => fair(r) && r.margin > 0 && r.margin >= 0.4 * (r.f.target || 21));
     const big = uniqueTop(bigCands, r => r.margin);
     if (big) add("BIG_WIN", "pair", "\u{1F4A5}", t("fact.bigWin", { name: nm(sideName(comp, D, big, big.winner)), score: scoreText(big, big.winner), n: big.margin, unit: unit }), big.players[big.winner], D.isTeams ? [big.sideId[big.winner]] : []);
     // CLOSE_MATCH: decided by 2 or fewer (any of the closest; the winner is named)
-    const close = recs.filter(r => decided(r) && r.margin <= 2);
+    const close = recs.filter(r => fair(r) && r.margin >= 0 && r.margin <= 2);
     if (close.length) {
       const minM = Math.min.apply(null, close.map(r => r.margin)), r = pick(close.filter(c => c.margin === minM));
       add("CLOSE_MATCH", "match", "\u{1F62C}", t("fact.close", { name: nm(sideName(comp, D, r, r.winner)), score: scoreText(r, r.winner) }), r.players[r.winner], D.isTeams ? [r.sideId[r.winner]] : []);
     }
     // MARATHON: most games/points in one match, clear leader
-    const mar = uniqueTop(recs.filter(r => r.total > 0), r => r.total);
+    const mar = uniqueTop(recs.filter(r => r.total > 0 && !r.retired), r => r.total);
     if (mar && recs.length >= 3) add("MARATHON", "match", "⏱️", t("fact.marathon", { a: nm(sideName(comp, D, mar, "A")), b: nm(sideName(comp, D, mar, "B")), n: mar.total, unit: unit }), mar.players.A.concat(mar.players.B));
     // IRON: most matches played, clear leader
     const iron = uniqueTop(Object.keys(T.P), id => T.P[id].played);
@@ -188,7 +213,7 @@ const CompFacts = (function () {
   /* ===== Teams: one fact per team (§13.2) ===== */
   // Every true, positive candidate for every team, in the spec's fallback order.
   function teamFactsRaw(comp, D, recs, T) {
-    const out = [], unit = unitOf(comp);
+    const out = [], unit = unitOf(comp), woLost = walkoverLosses(comp, D);
     const champ = championTeam(comp, D);
     const add = (team, code, emoji, html, subjects) => out.push({ code, kind: "team", emoji, html, subjects: subjects || [], teams: [team.id], weight: WEIGHT[code] || 1, team: team.id });
     comp.teams.forEach(function (team) {
@@ -198,10 +223,10 @@ const CompFacts = (function () {
       // 1. unbeaten in a division (2+ matches)
       comp.divisions.forEach(function (d) {
         const ms = mine.filter(r => r.division === d.id);
-        if (ms.length >= 2 && ms.every(r => r.winner === sideOf(r))) add(team, "TEAM_DIVISION", "\u{1F6E1}️", t("fact.teamDivision", { team: tname, div: esc(d.name), n: ms.length }));
+        if (!team.withdrawn && !woLost[team.id + "@" + d.id] && ms.length >= 2 && ms.every(r => r.winner === sideOf(r))) add(team, "TEAM_DIVISION", "\u{1F6E1}️", t("fact.teamDivision", { team: tname, div: esc(d.name), n: ms.length }));
       });
       // 2. best pair: a pair of the team that won all its matches (2+)
-      const pairs = Object.keys(T.PR).map(k => T.PR[k]).filter(pr => pr.team === team.id && pr.played >= 2 && pr.won === pr.played).sort((a, b) => b.won - a.won);
+      const pairs = Object.keys(T.PR).map(k => T.PR[k]).filter(pr => pr.team === team.id && !team.withdrawn && !woLost[pairKey(comp, pr.ids)] && pr.played >= 2 && pr.won === pr.played).sort((a, b) => b.won - a.won);
       if (pairs.length) add(team, "TEAM_PAIR", "\u{1F91D}", t("fact.teamPair", { team: tname, name: nm(pairName(comp, pairs[0].ids)), n: pairs[0].won }), pairs[0].ids);
       // 3. closest meeting involving the team (won, drawn, or lost by one match at most)
       const meetings = comp.meetings.filter(m => (D.side(m, "A") === team.id || D.side(m, "B") === team.id) && D.outcome(m).done && D.outcome(m).kind !== "bye" && D.outcome(m).kind !== "void" && D.outcome(m).kind !== "walkover");
@@ -213,7 +238,7 @@ const CompFacts = (function () {
         add(team, "TEAM_CLOSE", "\u{1F62C}", t(won ? "fact.teamCloseWon" : "fact.teamClose", { team: tname, opp: nm(opp), score: mineN + "–" + theirs }));
       }
       // 4. a comeback
-      const back = mine.find(r => r.comeback && r.winner === sideOf(r));
+      const back = mine.find(r => r.comeback && fair(r) && r.winner === sideOf(r));
       if (back) add(team, "COMEBACK", "\u{1F525}", t("fact.teamComeback", { team: tname, name: nm(pairName(comp, back.players[sideOf(back)])), score: scoreText(back, sideOf(back)) }), back.players[sideOf(back)]);
       // 5. took a set/game off the champions
       if (champ && champ !== team.id) {
@@ -223,7 +248,8 @@ const CompFacts = (function () {
       // 6. most points/games scored in a meeting they lost
       const lost = meetings.filter(m => { const o = D.outcome(m); return o.winner && o.winner !== "draw" && D.side(m, o.winner) !== team.id; });
       if (lost.length) {
-        const sc = lost.map(m => { const s = D.side(m, "A") === team.id ? "A" : "B", r = D.teamResult(m); return { m, n: s === "A" ? r.gamesA : r.gamesB }; }).sort((a, b) => b.n - a.n)[0];
+        // points actually played (walkover points aren't anyone's)
+        const sc = lost.map(m => { const s = D.side(m, "A") === team.id ? "A" : "B"; return { m, n: recs.filter(r => r.m.id === m.id).reduce((a, r) => a + r.games[s], 0) }; }).sort((a, b) => b.n - a.n)[0];
         if (sc.n > 0) add(team, "TEAM_FIGHT", "\u{1F4AA}", t("fact.teamFight", { team: tname, n: sc.n, unit: unit, opp: nm(D.entryLabel(D.side(sc.m, D.side(sc.m, "A") === team.id ? "B" : "A"))) }));
       }
       // 7. every player who played won at least once (2+ players)
@@ -260,8 +286,8 @@ const CompFacts = (function () {
   /* ===== Highlights ===== */
   function pickFacts(pool, n, rnd, needGroup) {
     const chosen = [], named = {};
-    const free = (f) => chosen.indexOf(f) === -1 && f.subjects.every(id => !named[id]) && !chosen.some(c => c.code === f.code);
-    const take = (f) => { chosen.push(f); f.subjects.forEach(id => { named[id] = true; }); };
+    const free = (f) => chosen.indexOf(f) === -1 && f.subjects.concat(f.teams).every(id => !named[id]) && !chosen.some(c => c.code === f.code);
+    const take = (f) => { chosen.push(f); f.subjects.concat(f.teams).forEach(id => { named[id] = true; }); };
     const weighted = (list) => { const tot = list.reduce((a, f) => a + f.weight, 0); let r = rnd() * tot; for (const f of list) { r -= f.weight; if (r <= 0) return f; } return list[list.length - 1]; };
     if (needGroup) { const g = pool.filter(f => (f.kind === "pair" || f.kind === "team") && free(f)); if (g.length) take(weighted(g)); }
     while (chosen.length < n) { const c = pool.filter(free); if (!c.length) break; take(weighted(c)); }
@@ -371,13 +397,13 @@ const CompFacts = (function () {
     const iron = bestOf(Object.keys(src).map(id => Object.assign({ id }, src[id])), [p => p.played], 2);
     if (iron.length && iron[0].played >= 3) out.push({ key: "iron", who: iron.map(p => ({ kind, id: p.id })), note: { n: iron[0].played } });
     // Match of the day: closest decided match (more points played breaks a tie, then the latest)
-    const dec = recs.filter(decided);
+    const dec = recs.filter(fair);
     if (dec.length) {
-      const motd = dec.slice().sort((a, b) => a.margin - b.margin || b.total - a.total || b.at - a.at)[0];
+      const motd = dec.slice().sort((a, b) => Math.abs(a.margin) - Math.abs(b.margin) || b.total - a.total || b.at - a.at)[0];
       out.push({ key: "matchOfDay", who: [{ kind: "match", id: motd.x.id }] });
     }
     // Comeback of the day: won after losing the first set by the most
-    const backs = recs.filter(r => r.comeback);
+    const backs = recs.filter(r => r.comeback && fair(r));
     if (backs.length) {
       const cb = backs.slice().sort((a, b) => b.firstDeficit - a.firstDeficit || b.at - a.at)[0];
       out.push({ key: "comeback", who: [{ kind: "match", id: cb.x.id }] });
@@ -390,12 +416,32 @@ const CompFacts = (function () {
   }
 
   // Frozen at "Finish" (§10.6) and shown while finished; live otherwise.
+  // Everything awards depend on. A result edited after Finish changes it, and the frozen awards
+  // give way to fresh ones rather than going stale.
+  function resultsKey(comp) {
+    return hashString(JSON.stringify([comp.matches.map(x => [x.status, x.sets, x.winner, x.outcome]), comp.meetings.map(m => m.resultOverride || 0),
+      comp.stages.map(st => st.config && st.config.manualOrder || 0), comp.entries.map(e => [e.withdrawn, e.withdrawMode]), (comp.teams || []).map(tm => [tm.withdrawn, tm.withdrawMode]),
+      comp.settings.standings, comp.settings.walkoverScore]));
+  }
   function awardsFor(comp, D) {
-    if (comp.status === "finished" && Array.isArray(comp.awards)) return comp.awards;
+    if (comp.status === "finished" && Array.isArray(comp.awards) && comp.awardsKey === resultsKey(comp)) return comp.awards;
     return awards(comp, D);
   }
-  function freeze(comp) { comp.awards = awards(comp); }
-  function unfreeze(comp) { delete comp.awards; }
+  function freeze(comp) { comp.awards = awards(comp); comp.awardsKey = resultsKey(comp); }
+  function unfreeze(comp) { delete comp.awards; delete comp.awardsKey; }
+  // The divisions an award's winners come from (pairs mode), for one-image-per-division sharing.
+  function awardDivisions(comp, D, a) {
+    if (a.scope) return [a.scope];
+    const out = [];
+    a.who.forEach(function (w) {
+      let d = null;
+      if (w.kind === "entry") d = (D.entryById[w.id] || {}).divisionId;
+      else if (w.kind === "match") d = (comp.matches.find(x => x.id === w.id) || {}).divisionId;
+      else if (w.kind === "player") d = (comp.players.find(p => p.id === w.id) || {}).divisionId;
+      if (d && out.indexOf(d) === -1) out.push(d);
+    });
+    return out;
+  }
 
   /* ===== Text for awards ===== */
   // Plain-text name of a winner entry (escaped HTML is produced by callers via esc()).
@@ -418,7 +464,7 @@ const CompFacts = (function () {
   function matchScore(comp, w, D) {
     if (w.kind === "meeting" && D) { const m = D.meetingById[w.id], r = m && D.teamResult(m); return r ? r.matchesA + "–" + r.matchesB : ""; }
     const x = w.kind === "match" && comp.matches.find(m => m.id === w.id);
-    return x ? (x.sets || []).map(s => s.a + "–" + s.b).join(", ") : "";
+    return x ? (x.sets || []).map(s => s.a + "–" + s.b).join(", ") + (x.outcome === "retired" ? " " + t("results.ret") : "") : "";
   }
   function awardLabel(comp, a) { return t("award." + a.key + (a.who.length > 1 ? ".co" : "")); }
   function awardNote(comp, D, a) {
@@ -485,5 +531,5 @@ const CompFacts = (function () {
     return h;
   }
 
-  return { awardsHtml, factsHtml, allFactsHtml, collect, highlights, divisionHighlights, teamFacts, awards, awardsFor, freeze, unfreeze, whoText, awardLabel, awardNote, EMOJI, seedOf, catalogue };
+  return { awardDivisions, resultsKey, awardsHtml, factsHtml, allFactsHtml, collect, highlights, divisionHighlights, teamFacts, awards, awardsFor, freeze, unfreeze, whoText, awardLabel, awardNote, EMOJI, seedOf, catalogue };
 })();

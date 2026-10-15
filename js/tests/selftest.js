@@ -923,6 +923,51 @@ function runSelfTests(){
     const cv = CompShare.drawImage(FC, null);
     ok("share image draws (and stays inside phone canvas limits)", cv.width >= 520 && cv.height > 300 && cv.width * cv.height <= 16800000);
 
+    out.push("phase 6 review fixes");
+    const eq0 = (x, y) => JSON.stringify(x) === JSON.stringify(y);
+    // a pasted code is untrusted: markup in ids or scores is refused
+    const evil = JSON.parse(JSON.stringify(TF4)); evil.matches[0].id = 'zz"><img src=x onerror=alert(1)>';
+    const evil2 = JSON.parse(JSON.stringify(TF4)); evil2.matches[1].sets = [{ a: "21<img src=x onerror=alert(1)>", b: 5 }];
+    const enc = (d) => _cmxEncode({ app: "CourtMixer", type: "competition", version: 1, competition: d }, "CMXC1:");
+    ok("codes with markup in ids or scores are refused", CompShare.decode(enc(evil)) === null && CompShare.decode(enc(evil2)) === null && CompShare.decode(enc(JSON.parse(JSON.stringify(TF4)))) !== null);
+    const evil3 = JSON.parse(JSON.stringify(TF4)); evil3.teams[0].name = '<img src=x onerror=alert(1)> & "Co"';
+    ok("names may hold any text, and are escaped everywhere", CompShare.decode(enc(evil3)) !== null && CompShare.buildViewer(CompShare.decode(enc(evil3))).indexOf("<img src=x") === -1);
+    // facts tell the truth
+    const BW = dynComp(4, { type: "roundRobin" });
+    BW.settings.matchFormats = { main: F("bad3x21") };
+    const bw0 = BW.matches[0];
+    CompResults.apply(BW, bw0.id, { sets: [{ a: 21, b: 19 }, { a: 2, b: 21 }, { a: 21, b: 19 }], winner: "A" });       // A won with fewer points
+    CompResults.apply(BW, BW.matches[1].id, { sets: [{ a: 21, b: 5 }, { a: 11, b: 2 }], winner: "B", outcome: "retired" }); // B won by retirement
+    const bwFacts = CompFacts.catalogue(BW, CompStandings.derive(BW), CompFacts.collect(BW, CompStandings.derive(BW)), mulberry32(1));
+    ok("no 'won by' for a winner who scored fewer points, no comeback for a retirement", !bwFacts.some(f => f.code === "BIG_WIN" || f.code === "COMEBACK"));
+    ok("no comeback of the day from a retirement", !CompFacts.awards(BW).some(a => a.key === "comeback"));
+    const WOC = dynComp(5, { type: "roundRobin" }), woE = WOC.entries[0].id, woD = CompStandings.derive(WOC);
+    WOC.matches.forEach(x => { const m = woD.meetingById[x.meetingId], s = woD.side(m, "A") === woE ? "A" : woD.side(m, "B") === woE ? "B" : null; if (s) x._mine = s; });
+    const woMine = WOC.matches.filter(x => x._mine);
+    woMine.slice(0, 3).forEach(x => CompResults.apply(WOC, x.id, { sets: [{ a: 4, b: 1 }].map(st => x._mine === "A" ? st : { a: 1, b: 4 }), winner: x._mine }));
+    CompResults.apply(WOC, woMine[3].id, { sets: [], winner: woMine[3]._mine === "A" ? "B" : "A", outcome: "walkover" });
+    const woDD = CompStandings.derive(WOC);
+    ok("a conceded walkover means not unbeaten", !CompFacts.catalogue(WOC, woDD, CompFacts.collect(WOC, woDD), mulberry32(2)).some(f => f.code === "UNBEATEN"));
+    // frozen awards follow a result edited after Finish
+    const FZ = dynComp(4, { type: "knockout", thirdPlace: false }); playAll(FZ, 3);
+    FZ.status = "finished"; CompFacts.freeze(FZ);
+    const fzD = CompStandings.derive(FZ), finFZ = FZ.meetings.filter(m => m.stageId === FZ.stages[0].id).sort((a, b) => b.round - a.round)[0], fx = fzD.matchByMeeting[finFZ.id];
+    CompResults.apply(FZ, fx.id, { sets: [{ a: fx.sets[0].b, b: fx.sets[0].a }], winner: fx.winner === "A" ? "B" : "A" });
+    const fzD2 = CompStandings.derive(FZ);
+    eq("a result edited after Finish updates the awards", CompFacts.awardsFor(FZ, fzD2).find(a => a.key === "champion").who[0].id, fzD2.side(finFZ, fx.winner));
+    // the same facts on the phone that imports the code
+    eq("facts are the same after export and import", CompFacts.highlights(CompShare.decode(CompShare.encode(FC))).map(f => f.html), CompFacts.highlights(FC).map(f => f.html));
+    const hlT = CompFacts.highlights(TF4), teamsNamed = [].concat.apply([], hlT.map(f => f.teams));
+    ok("teams: a team is named in one highlight at most", new Set(teamsNamed).size === teamsNamed.length);
+    const TWO = CompModel.newCompetition({ name: "Two" });
+    CompModel.applyPreset(TWO, "pairsRoundRobin"); TWO.sport = "padel"; CompModel.setDivisionCount(TWO, 2);
+    TWO.divisions.forEach(d => { for (let i = 0; i < 4; i++) Wizard.pairsUtil.addPair(TWO, d.id, [d.name + i + "a", d.name + i + "b"], ["M", "M"]).seed = i + 1; });
+    TWO.settings.matchFormats = { main: F("padRace4") }; TWO.settings.stagePlan = { all: { type: "roundRobin" } };
+    CompGenerate.applyDraw(TWO, CompGenerate.generateDraw(TWO)); TWO.status = "live"; playAll(TWO, 4);
+    const twoD = CompStandings.derive(TWO), twoAw = CompFacts.awards(TWO, twoD);
+    ok("awards know which division they were won in (one image per division)", twoAw.length > 0 && twoAw.filter(a => a.who[0].kind === "match").every(a =>
+      eq0(CompFacts.awardDivisions(TWO, twoD, a), [TWO.matches.find(x => x.id === a.who[0].id).divisionId])) && twoAw.filter(a => a.scope).every(a => CompFacts.awardDivisions(TWO, twoD, a)[0] === a.scope));
+
     out.push("use recommended, then generate");
     const ur = CompModel.newCompetition({ name: "Rec" });
     CompModel.applyPreset(ur, CompModel.RECOMMENDED_PRESET);

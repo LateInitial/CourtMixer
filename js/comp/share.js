@@ -20,12 +20,40 @@ const CompShare = (function () {
       competition: shortIds(comp) };
   }
   function encode(comp) { return _cmxEncode(payload(comp), "CMXC1:"); }
+  // A pasted code is someone else's data, and ids, statuses and scores end up in HTML attributes
+  // and text. Only free-text fields may hold arbitrary text (they are always escaped when shown);
+  // every other string must be a plain token, every key too, and set scores must be whole numbers.
+  const FREE = { name: 1, label: 1, note: 1, todsCode: 1, title: 1, courtNames: 1, divisionNames: 1 };
+  const TOKEN = /^[A-Za-z0-9~_:.\/+-]{0,80}$/;
+  function safeDoc(doc) {
+    let ok = true;
+    const walk = (v, key, free) => {
+      if (!ok) return;
+      if (v === null || typeof v === "boolean") return;
+      if (typeof v === "number") { if (!isFinite(v)) ok = false; return; }
+      if (typeof v === "string") {
+        if (free) return;
+        if (key === "dateISO" ? !/^(\d{4}-\d{2}-\d{2})?$/.test(v) : !TOKEN.test(v)) ok = false;
+        return;
+      }
+      if (Array.isArray(v)) { v.forEach(x => walk(x, key, free)); return; }
+      if (typeof v !== "object") { ok = false; return; }
+      if (key === "sets") {
+        // a set: whole-number scores only
+        ["a", "b", "tbA", "tbB"].forEach(k => { if (k in v && v[k] !== null && !(Number.isInteger(v[k]) && v[k] >= 0 && v[k] < 1000)) ok = false; });
+      }
+      Object.keys(v).forEach(k => { if (!TOKEN.test(k)) ok = false; else walk(v[k], key === "sets" ? "sets" : k, !!FREE[k]); });
+    };
+    walk(doc, "", false);
+    return ok;
+  }
   // The competition document inside a pasted code, or null.
   function decode(text) {
     const data = _cmxDecode(text);
     if (!data || data.app !== "CourtMixer" || data.type !== "competition" || !data.competition || typeof data.competition !== "object") return null;
     const doc = data.competition;
     if (!doc.id || !Array.isArray(doc.divisions) || !Array.isArray(doc.matches) || !Array.isArray(doc.meetings) || !Array.isArray(doc.stages)) return null;
+    if (!safeDoc(doc)) return null;
     return CompModel.migrate(doc);
   }
 
@@ -155,10 +183,10 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:Inter,'Segoe UI'
 .view{display:none;}
 .card{background:var(--card);border:1px solid #e1e9ff;border-radius:14px;padding:14px;margin-bottom:12px;}
 .comp-name{font-weight:700;font-size:18px;overflow-wrap:anywhere;}
-.comp-meta{color:#4f6fff;font-size:13px;font-weight:600;margin-top:2px;}
+.comp-meta{overflow-wrap:anywhere;color:#4f6fff;font-size:13px;font-weight:600;margin-top:2px;}
 .comp-status{color:var(--muted);font-size:12.5px;margin-top:4px;}
-.sec{font-weight:800;font-size:16px;margin:16px 4px 8px;color:#8d5f1f;}
-.head{color:#6a769f;font-weight:700;font-size:12px;letter-spacing:.04em;text-transform:uppercase;margin-bottom:8px;}
+.sec{overflow-wrap:anywhere;font-weight:800;font-size:16px;margin:16px 4px 8px;color:#8d5f1f;}
+.head{overflow-wrap:anywhere;color:#6a769f;font-weight:700;font-size:12px;letter-spacing:.04em;text-transform:uppercase;margin-bottom:8px;}
 .st-r{display:grid;grid-template-columns:30px minmax(0,1fr) 34px 44px;gap:6px;align-items:center;background:#f5f8ff;border:1px solid #e1e9ff;border-radius:9px;padding:8px 8px;margin-bottom:5px;font-size:14px;}
 .st-r.h{background:none;border:none;font-size:11px;color:var(--muted);text-transform:uppercase;font-weight:700;padding:0 8px 2px;}
 .st-r>span:nth-child(n+3){text-align:center;}
@@ -167,7 +195,7 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:Inter,'Segoe UI'
 .st-q{display:inline-block;margin-left:4px;font-size:10px;font-weight:800;color:#16a34a;background:#e6f8ee;border-radius:6px;padding:0 4px;vertical-align:middle;}
 .st-line{margin-bottom:12px;box-shadow:0 6px 0 -4px #f0d9a8;}
 .ko-r{margin-bottom:10px;}
-.ko-h{font-size:12px;font-weight:700;color:#6a769f;text-transform:uppercase;letter-spacing:.04em;margin:4px 2px 6px;}
+.ko-h{overflow-wrap:anywhere;font-size:12px;font-weight:700;color:#6a769f;text-transform:uppercase;letter-spacing:.04em;margin:4px 2px 6px;}
 .ko-m{background:#f8faff;border:1px solid #e1e9ff;border-radius:10px;padding:8px 10px;margin-bottom:6px;}
 .ko-s{font-size:14px;padding:2px 0;overflow-wrap:anywhere;}
 .ko-s.win{color:#16a34a;font-weight:800;}
@@ -177,7 +205,7 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:Inter,'Segoe UI'
 .res-sides{font-size:14px;min-width:0;overflow-wrap:anywhere;line-height:1.45;}
 .res-vs{color:var(--muted);margin:0 5px;font-size:12px;}
 .res-score{font-weight:800;font-size:14.5px;white-space:nowrap;}
-.res-meta{margin-top:4px;font-size:11.5px;color:var(--muted);}
+.res-meta{overflow-wrap:anywhere;margin-top:4px;font-size:11.5px;color:var(--muted);}
 .res-rub{font-size:12.5px;margin-top:6px;padding-top:6px;border-top:1px solid #e1e9ff;display:flex;justify-content:space-between;gap:8px;}
 .res-rub>span:first-child{min-width:0;overflow-wrap:anywhere;}
 .res-rub>span:last-child{white-space:nowrap;text-align:right;}
@@ -185,10 +213,11 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:Inter,'Segoe UI'
 .tag{font-size:11px;padding:1px 7px;border-radius:20px;background:#eef2ff;color:#3949ab;margin-left:4px;white-space:nowrap;}
 .tag.w{background:#e6f8ee;color:#16a34a;}
 .muted{color:var(--muted);font-size:12.5px;}
-.aw-card{display:flex;flex-direction:column;gap:8px;}
-.aw-head{font-weight:700;font-size:12px;letter-spacing:.04em;text-transform:uppercase;color:#6a769f;}
+.aw-card{display:flex;flex-direction:column;gap:8px;min-width:0;}
+.aw-card>*{min-width:0;}
+.aw-head{overflow-wrap:anywhere;font-weight:700;font-size:12px;letter-spacing:.04em;text-transform:uppercase;color:#6a769f;}
 .aw-sub{font-size:12.5px;color:var(--muted);}
-.aw-div{font-weight:700;font-size:13px;color:#8d5f1f;margin-top:4px;}
+.aw-div{overflow-wrap:anywhere;font-weight:700;font-size:13px;color:#8d5f1f;margin-top:4px;}
 .aw-row{display:flex;gap:12px;align-items:flex-start;background:#f8faff;border:1px solid #e1e9ff;border-radius:10px;padding:10px 12px;}
 .aw-em{font-size:22px;line-height:1.2;flex-shrink:0;}
 .aw-body{min-width:0;flex:1;}
@@ -215,7 +244,7 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:Inter,'Segoe UI'
 .dm-rec{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;text-align:center;background:#f8faff;border:1px solid #e1e9ff;border-radius:10px;padding:10px;margin-bottom:10px;}
 .dm-rec b{display:block;font-size:18px;}
 .dm-rec span{font-size:11px;color:var(--muted);}
-.dm-h{font-size:11px;font-weight:700;color:#6a769f;text-transform:uppercase;letter-spacing:.05em;margin:10px 0 6px;}
+.dm-h{overflow-wrap:anywhere;font-size:11px;font-weight:700;color:#6a769f;text-transform:uppercase;letter-spacing:.05em;margin:10px 0 6px;}
 .dm-m{border-top:1px solid #e1e9ff;padding:7px 0;font-size:13px;}
 .dm-m:first-of-type{border-top:none;}
 .dm-mt{display:flex;justify-content:space-between;gap:8px;}
@@ -478,7 +507,8 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:Inter,'Segoe UI'
     });
 
     // --- awards (placings for the divisions shown) and highlights
-    const aws = CompFacts.awardsFor(comp, D).filter(a => !a.scope || !divIds || divIds.indexOf(a.scope) !== -1);
+    // one image per division: only awards won in that division
+    const aws = CompFacts.awardsFor(comp, D).filter(a => !divIds || D.isTeams || CompFacts.awardDivisions(comp, D, a).every(d => divIds.indexOf(d) !== -1));
     if (aws.length) {
       const rows = [heading("\u{1F3C6} " + t("award.title"))];
       aws.forEach(function (a) {
@@ -497,7 +527,9 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:Inter,'Segoe UI'
       });
       cards.push(rows);
     }
-    const facts = CompFacts.highlights(comp, D);
+    const facts = divIds && !D.isTeams && comp.divisions.length > 1
+      ? [].concat.apply([], CompFacts.divisionHighlights(comp, D).filter(x => divIds.indexOf(x.division.id) !== -1).map(x => x.facts))
+      : CompFacts.highlights(comp, D);
     if (facts.length) {
       const rows = [heading(t("facts.title"))], FN = "13px " + FONT, FB = "700 13px " + FONT;
       facts.forEach(function (fc) {
@@ -516,7 +548,7 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:Inter,'Segoe UI'
     const cardH = cards.map(rows => rows.reduce((a, r) => a + r.h, 0) + PAD * 2);
     const totalH = OUT + brandH + cardH.reduce((a, h) => a + h + GAP, 0) + OUT;
     // phones limit canvas area (iOS about 16.7 million pixels): scale down tall images instead of failing
-    const S = Math.max(1, Math.min(4, Math.floor(Math.sqrt(16000000 / (W * totalH)) * 4) / 4));
+    const S = Math.max(0.25, Math.min(4, Math.floor(Math.sqrt(16000000 / (W * totalH)) * 4) / 4, 32000 / totalH));
     const canvas = document.createElement("canvas");
     canvas.width = Math.round(W * S); canvas.height = Math.ceil(totalH * S);
     const ctx = canvas.getContext("2d"); ctx.scale(S, S);

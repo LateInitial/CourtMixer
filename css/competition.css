@@ -199,10 +199,11 @@
 .team-roster { font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
 
 /* ===== Awards and fun facts (Phase 6) ===== */
-.aw-card { display: flex; flex-direction: column; gap: 8px; }
-.aw-head { font-weight: 700; font-size: 12px; letter-spacing: .04em; text-transform: uppercase; color: #6a769f; }
+.aw-card { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.aw-card > * { min-width: 0; }
+.aw-head { overflow-wrap: anywhere; font-weight: 700; font-size: 12px; letter-spacing: .04em; text-transform: uppercase; color: #6a769f; }
 .aw-sub { font-size: 12.5px; color: var(--muted, #5f6d94); }
-.aw-div { font-weight: 700; font-size: 13px; color: #8d5f1f; margin-top: 4px; }
+.aw-div { overflow-wrap: anywhere; font-weight: 700; font-size: 13px; color: #8d5f1f; margin-top: 4px; }
 .aw-row { display: flex; gap: 12px; align-items: flex-start; background: #f8faff; border: 1px solid #e1e9ff; border-radius: 10px; padding: 10px 12px; }
 .aw-em { font-size: 22px; line-height: 1.2; flex-shrink: 0; }
 .aw-body { min-width: 0; flex: 1; }
@@ -214,3 +215,6 @@
 .cf-em { font-size: 20px; line-height: 1.4; flex-shrink: 0; }
 .cf-tx { font-size: 13.5px; color: #3b4e84; line-height: 1.55; overflow-wrap: anywhere; min-width: 0; }
 .cf-tx strong { color: #1b2340; }
+/* long division names wrap instead of widening the page (competition only; social is unchanged) */
+.comp-seg, .wiz-seg { flex-wrap: wrap; max-width: 100%; }
+.comp-seg .court-segment, .wiz-seg .court-segment { min-width: 0; max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
