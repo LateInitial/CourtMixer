@@ -166,10 +166,38 @@ const CompGenerate = (function () {
   // Generates one division's stages, meetings and matches. Pure: returns new records.
   function generateDivision(comp, division) {
     const entries = comp.entries.filter(e => e.divisionId === division.id && !e.withdrawn);
-    const plan = planFor(comp, division), fids = formatIds(comp);
-    const stages = [], meetings = [];
-    if (entries.length < 2) return { stages, meetings, matches: [] };
     const baseKey = division.id + (division.drawSeq ? ":" + division.drawSeq : ""); // Redraw bumps drawSeq
+    const r = buildStages(comp, entries, planFor(comp, division), baseKey, division.id);
+    const matches = r.meetings.filter(m => !isByeMeeting(m)).map(m => matchFor(m, division));
+    return { stages: r.stages, meetings: r.meetings, matches };
+  }
+
+  // Teams mode: the teams are the entrants of one stage plan across all divisions; every meeting
+  // gets one match per rubber of the meeting template (§5 rules, §11).
+  function generateTeams(comp) {
+    const teams = comp.teams.filter(tm => !tm.withdrawn).map(tm => ({ id: tm.id, seed: tm.seed || null }));
+    const plan = (comp.settings.stagePlan || {}).all || { type: "roundRobin" };
+    const r = buildStages(comp, teams, plan, "teams" + (comp.settings.drawSeq ? ":" + comp.settings.drawSeq : ""), null);
+    r.meetings.forEach(m => { m.sideA.refType = "team"; m.sideB.refType = "team"; });
+    const rubbers = (comp.settings.meetingTemplate || []).slice().sort((a, b) => a.order - b.order);
+    const byId = {}; comp.divisions.forEach(d => { byId[d.id] = d; });
+    const matches = [];
+    r.meetings.filter(m => !isByeMeeting(m)).forEach(function (m) {
+      rubbers.forEach(function (rb, i) {
+        const x = matchFor(m, byId[rb.divisionId] || { id: rb.divisionId, category: rb.category });
+        x.order = i + 1; x.rubberId = rb.id; x.category = rb.category;
+        matches.push(x);
+      });
+    });
+    return { stages: r.stages, meetings: r.meetings, matches };
+  }
+
+  // Stages and meetings for a list of entrants ({id, seed}) under one stage plan.
+  function buildStages(comp, entries, plan, baseKey, divisionId) {
+    const fids = formatIds(comp);
+    const stages = [], meetings = [];
+    if (entries.length < 2) return { stages, meetings };
+    const division = { id: divisionId };
 
     if (plan.type === "roundRobin" || plan.type === "doubleRoundRobin") {
       const st = newStage(division.id, plan.type, 0, { manualOrder: {} }, fids.main);
@@ -206,8 +234,7 @@ const CompGenerate = (function () {
       stages.push(st);
     }
     stages.forEach((s, i) => { s.order = i; });
-    const matches = meetings.filter(m => !isByeMeeting(m)).map(m => matchFor(m, division));
-    return { stages, meetings, matches };
+    return { stages, meetings };
   }
 
   function isByeMeeting(m) {
@@ -217,6 +244,12 @@ const CompGenerate = (function () {
   // Whole draw. Courts come from settings; ids are kept when they already exist.
   function generateDraw(comp) {
     const out = { stages: [], meetings: [], matches: [], courts: [] };
+    if (comp.kind === "teams") {
+      const r = generateTeams(comp);
+      out.stages = r.stages; out.meetings = r.meetings; out.matches = r.matches;
+      out.courts = buildCourts(comp);
+      return out;
+    }
     comp.divisions.forEach(function (d) {
       const r = generateDivision(comp, d);
       out.stages.push.apply(out.stages, r.stages);
@@ -248,6 +281,6 @@ const CompGenerate = (function () {
     comp.divisions.forEach(d => { d.courtIds = comp.courts.filter(c => c.homeDivisionIds.indexOf(d.id) !== -1).map(c => c.id); });
   }
 
-  return { roundRobin, splitGroups, bracketPositions, placeQualifiers, seedOrder, nextPow2, generateDivision, generateDraw,
+  return { roundRobin, splitGroups, bracketPositions, placeQualifiers, seedOrder, nextPow2, generateDivision, generateTeams, generateDraw,
     buildCourts, applyDraw, isByeMeeting, roundLabelKey, groupName, rngFor };
 })();

@@ -19,6 +19,15 @@ const CompUI = (function () {
   // Whole minutes on court (refreshed every 30 s).
   function elapsed(since) { return t("courts.elapsed", { m: Math.max(0, Math.floor((Date.now() - since) / 60000)) }); }
   function divName(D, id) { const d = D.divisionById[id]; return d ? d.name : ""; }
+  // "A · Group A · Round 1" (pairs) or "Group A · Round 1 · A1" (teams: the rubber names the division).
+  function where(D, x, short) { return D.isTeams ? D.matchLabel(x, short) : divName(D, x.divisionId) + " \u00b7 " + D.meetingLabel(D.meetingById[x.meetingId], short); }
+  // One side of a match: the pair, or "Team: Player / Player".
+  function sideText(D, x, sd) {
+    const m = D.meetingById[x.meetingId];
+    if (!D.isTeams) return D.sideLabel(m, sd);
+    const ps = D.playerIdsOf(x, sd);
+    return D.sideLabel(m, sd) + (ps.length ? ": " + playerNames(D.comp, ps) : "");
+  }
 
   /* ===== Courts ===== */
   function renderCourts(root, comp) {
@@ -34,8 +43,8 @@ const CompUI = (function () {
       if (x) {
         const m = D.meetingById[x.meetingId];
         h += '<span class="elapsed" data-since="' + (x.startedAt || Date.now()) + '">' + elapsed(x.startedAt || Date.now()) + "</span></div>" +
-          '<div class="muted">' + esc(divName(D, x.divisionId) + " · " + D.meetingLabel(m, false)) + "</div>" +
-          '<div class="cc-sides"><div>' + esc(playerNames(comp, D.playerIdsOf(x, "A"))) + '</div><div class="vs">' + esc(t("courts.vs")) + "</div><div>" + esc(playerNames(comp, D.playerIdsOf(x, "B"))) + "</div></div>" +
+          '<div class="muted">' + esc(where(D, x, false)) + "</div>" +
+          '<div class="cc-sides"><div>' + esc(D.isTeams ? sideText(D, x, "A") : playerNames(comp, D.playerIdsOf(x, "A"))) + '</div><div class="vs">' + esc(t("courts.vs")) + "</div><div>" + esc(D.isTeams ? sideText(D, x, "B") : playerNames(comp, D.playerIdsOf(x, "B"))) + "</div></div>" +
           '<div class="comp-actions"><button type="button" class="primary" data-act="score" data-id="' + x.id + '">' + esc(t("courts.enterScore")) + "</button>" +
           '<button type="button" class="secondary" data-act="scoreMode" data-mode="walkover" data-id="' + x.id + '">' + esc(t("score.walkover")) + "</button>" +
           '<button type="button" class="secondary" data-act="scoreMode" data-mode="retired" data-id="' + x.id + '">' + esc(t("score.retired")) + "</button>" +
@@ -48,8 +57,8 @@ const CompUI = (function () {
           takenMatch[s.id] = true;
           D.playerIdsOf(s, "A").concat(D.playerIdsOf(s, "B")).forEach(p => { takenPlayer[p] = true; });
           const m = D.meetingById[s.meetingId];
-          h += '<div class="muted">' + esc(t("courts.suggested") + " · " + divName(D, s.divisionId) + " · " + D.meetingLabel(m, false)) + "</div>" +
-            '<div class="cc-sides"><div>' + esc(D.sideLabel(m, "A")) + '</div><div class="vs">' + esc(t("courts.vs")) + "</div><div>" + esc(D.sideLabel(m, "B")) + "</div></div>" +
+          h += '<div class="muted">' + esc(t("courts.suggested") + " · " + where(D, s, false)) + "</div>" +
+            '<div class="cc-sides"><div>' + esc(sideText(D, s, "A")) + '</div><div class="vs">' + esc(t("courts.vs")) + "</div><div>" + esc(sideText(D, s, "B")) + "</div></div>" +
             '<div class="comp-actions"><button type="button" class="primary" data-act="start" data-id="' + s.id + '" data-court="' + c.id + '"' + (sg.needsConfirm ? ' data-confirm="1"' : "") + ">" + esc(t("courts.start")) + "</button>" +
             '<button type="button" class="secondary" data-act="choose" data-court="' + c.id + '">' + esc(t("courts.choose")) + "</button></div>";
         } else {
@@ -60,6 +69,7 @@ const CompUI = (function () {
       h += "</div>";
     });
     h += "</div>";
+    if (D.isTeams) h += CompTeamsUI.lineupsCard(D);
     // Up next
     const ready = ui.upNextDiv ? ctx.ready.filter(x => x.divisionId === ui.upNextDiv) : ctx.ready;
     h += '<div class="card"><div class="wiz-label">' + esc(t("courts.upNext")) + "</div>";
@@ -67,7 +77,7 @@ const CompUI = (function () {
     if (!ready.length) h += '<div class="muted">' + esc(t("courts.noneReady")) + "</div>";
     h += ready.slice(0, ui.showAll ? ready.length : 5).map(x => {
       const m = D.meetingById[x.meetingId];
-      return '<div class="cc-next"><span class="muted">' + esc(divName(D, x.divisionId) + " · " + D.meetingLabel(m, true)) + "</span><span>" + esc(D.sideLabel(m, "A") + " " + t("courts.vs") + " " + D.sideLabel(m, "B")) + "</span></div>";
+      return '<div class="cc-next"><span class="muted">' + esc(where(D, x, true)) + "</span><span>" + esc(sideText(D, x, "A") + " " + t("courts.vs") + " " + sideText(D, x, "B")) + "</span></div>";
     }).join("");
     if (ready.length > 5) h += '<button type="button" class="wiz-link" data-act="showAll">' + esc(ui.showAll ? t("courts.showLess") : t("courts.showAll", { n: ready.length })) + "</button>";
     h += "</div>";
@@ -93,10 +103,12 @@ const CompUI = (function () {
   function chooseMatch(comp, courtId) {
     const D = D_(comp), ready = CompSchedule.readyList(D);
     const groups = {};
-    ready.forEach(x => { const k = divName(D, x.divisionId) + " · " + D.meetingLabel(D.meetingById[x.meetingId], true).replace(/ \d+$/, ""); (groups[k] = groups[k] || []).push(x); });
+    ready.forEach(x => { const k = D.isTeams ? D.meetingLabel(D.meetingById[x.meetingId], false) + " · " + D.sideLabel(D.meetingById[x.meetingId], "A") + " " + t("courts.vs") + " " + D.sideLabel(D.meetingById[x.meetingId], "B")
+      : divName(D, x.divisionId) + " · " + D.meetingLabel(D.meetingById[x.meetingId], true).replace(/ \d+$/, ""); (groups[k] = groups[k] || []).push(x); });
     const body = Object.keys(groups).map(k => '<div class="wiz-label">' + esc(k) + "</div>" + groups[k].map(x => {
       const m = D.meetingById[x.meetingId];
-      return '<button type="button" class="comp-list-item" data-id="' + x.id + '"><span class="comp-list-name">' + esc(D.sideLabel(m, "A") + " " + t("courts.vs") + " " + D.sideLabel(m, "B")) + '</span><span class="muted">' + esc(D.meetingLabel(m, false)) + "</span></button>";
+      return '<button type="button" class="comp-list-item" data-id="' + x.id + '"><span class="comp-list-name">' + esc(D.isTeams ? (D.rubberOf(x).label || "") + " · " + playerNames(comp, D.playerIdsOf(x, "A")) + " " + t("courts.vs") + " " + playerNames(comp, D.playerIdsOf(x, "B"))
+        : D.sideLabel(m, "A") + " " + t("courts.vs") + " " + D.sideLabel(m, "B")) + '</span><span class="muted">' + esc(D.isTeams ? "" : D.meetingLabel(m, false)) + "</span></button>";
     }).join("")).join("") || cmxMsgHtml(t("courts.noneReady"));
     cmxShowModal({ title: t("courts.choose"), bodyHTML: '<div class="comp-list">' + body + "</div>", buttons: [{ label: t("wiz.close"), cls: "ghost", onClick: function () {} }],
       onOpen: function (box) { box.querySelectorAll(".comp-list-item").forEach(b => { b.onclick = function () { cmxCloseModal(); startMatch(comp, b.dataset.id, courtId); }; }); } });
@@ -116,8 +128,8 @@ const CompUI = (function () {
     const D = D_(comp);
     if (!ui.div || !D.divisionById[ui.div]) ui.div = comp.divisions[0] && comp.divisions[0].id;
     let h = "";
-    if (comp.divisions.length > 1) h += seg("stDiv", comp.divisions.map(d => ({ value: d.id, label: d.name })), ui.div);
-    const stages = comp.stages.filter(s => s.divisionId === ui.div).sort((a, b) => a.order - b.order);
+    if (comp.divisions.length > 1 && !D.isTeams) h += seg("stDiv", comp.divisions.map(d => ({ value: d.id, label: d.name })), ui.div);
+    const stages = comp.stages.filter(s => D.isTeams || s.divisionId === ui.div).sort((a, b) => a.order - b.order);
     const views = [];
     stages.forEach(st => {
       if (st.type === "knockout") views.push({ value: st.id + ":ko", label: t("standings.knockout"), st });
@@ -132,6 +144,7 @@ const CompUI = (function () {
   }
 
   function tableHtml(comp, D, st, g) {
+    if (D.isTeams) return CompTeamsUI.tableHtml(D, st, g);
     const rows = D.table(st.id, g.id), f = D.formatFor(st), p = comp.settings.standings.pairs;
     const showPts = p.rankBy !== "wins", showSets = f.sets > 1, unit = f.setType === "games" ? "games" : "points";
     const sign = (n) => (n > 0 ? "+" : "") + n;
@@ -142,7 +155,7 @@ const CompUI = (function () {
     const adv = st.type === "groups" ? st.config.advance : 0, complete = D.groupComplete(st.id, g.id);
     rows.forEach(function (r, i) {
       const sub = [t("standings.p") + " " + r.played, t("standings.l") + " " + r.lost].concat(showSets ? [t("standings.setDiff") + " " + sign(r.setDiff)] : []).concat([t("standings.diff." + unit) + " " + sign(r.gameDiff)]);
-      h += '<div class="st-row' + (adv && i === adv - 1 && rows.length > adv ? " st-line" : "") + (r.tiedWith.length ? " st-tied" : "") + '">' +
+      h += '<div class="st-row' + (adv && i === adv - 1 && rows.length > adv ? " st-line" : "") + (r.tiedWith.length && complete ? " st-tied" : "") + '">' +
         "<span>" + r.rank + (r.qualifies && complete && !r.tiedWith.length ? '<span class="st-q">Q</span>' : "") + "</span>" +
         '<span class="st-name"><button type="button" class="st-link" data-act="entry" data-id="' + esc(r.id) + '">' + esc(D.entryLabel(r.id)) + '</button><span class="st-sub">' + esc(sub.join(" · ")) + "</span></span>" +
         '<span class="st-x">' + r.played + "</span><span><b>" + r.won + '</b></span><span class="st-x">' + r.lost + "</span>" +
@@ -168,8 +181,9 @@ const CompUI = (function () {
       list.forEach(function (m) {
         const o = D.outcome(m), x = D.matchByMeeting[m.id];
         const line = (sd) => '<div class="ko-side' + (o.winner === sd ? " win" : "") + '">' + esc(D.sideLabel(m, sd)) + "</div>";
-        h += '<div class="ko-meeting">' + line("A") + line("B") +
-          '<div class="muted">' + esc(o.kind === "bye" ? t("ko.byeNote") : x && x.status === "done" ? setsText(x) : x && x.status === "onCourt" ? t("results.onCourt") : "") + "</div></div>";
+        const note = o.kind === "bye" ? t("ko.byeNote") : D.isTeams ? CompTeamsUI.meetingNote(D, m) : x && x.status === "done" ? setsText(x) : x && x.status === "onCourt" ? t("results.onCourt") : "";
+        h += '<div class="ko-meeting">' + line("A") + line("B") + '<div class="muted">' + esc(note) + "</div>" +
+          (D.isTeams && o.team && o.team.needsDecision ? '<button type="button" class="secondary small" data-act="decideMeeting" data-id="' + m.id + '">' + esc(t("teams.decideWinner")) + "</button>" : "") + "</div>";
       });
       h += "</div>";
     });
@@ -206,6 +220,7 @@ const CompUI = (function () {
   }
 
   function entryDetail(comp, entryId) {
+    if (comp.kind === "teams") return CompTeamsUI.teamDetail(comp, entryId);
     const D = D_(comp), e = D.entryById[entryId];
     if (!e) return;
     let w = 0, l = 0, gf = 0, ga = 0;
@@ -225,6 +240,7 @@ const CompUI = (function () {
 
   /* ===== Results ===== */
   function renderResults(root, comp) {
+    if (comp.kind === "teams") return CompTeamsUI.renderResults(root, comp);
     const D = D_(comp);
     let h = '<div class="card">';
     if (comp.divisions.length > 1) h += chips("resDiv", [{ value: "", label: t("filter.all") }].concat(comp.divisions.map(d => ({ value: d.id, label: d.name }))), ui.resDiv);
@@ -249,6 +265,7 @@ const CompUI = (function () {
 
   /* ===== Entries ===== */
   function renderEntries(root, comp) {
+    if (comp.kind === "teams") return CompTeamsUI.renderEntries(root, comp);
     const D = D_(comp);
     if (!ui.entDiv || !D.divisionById[ui.entDiv]) ui.entDiv = comp.divisions[0] && comp.divisions[0].id;
     let h = "";
@@ -268,13 +285,15 @@ const CompUI = (function () {
     root.innerHTML = h;
   }
 
+  // A pair, or in a team competition a whole team.
   function withdraw(comp, entryId) {
-    const e = comp.entries.find(x => x.id === entryId);
+    const e = comp.entries.find(x => x.id === entryId) || (comp.teams || []).find(x => x.id === entryId);
     if (!e) return;
+    const label = e.label || e.name;
     const run = (mode) => {
       CompShell.snapshot(t("entries.withdraw"), comp);
       e.withdrawn = true; e.withdrawMode = mode;
-      e.playerIds.forEach(id => { const p = comp.players.find(x => x.id === id); if (p) p.withdrawn = true; });
+      (e.playerIds || []).forEach(id => { const p = comp.players.find(x => x.id === id); if (p) p.withdrawn = true; });
       comp.matches.forEach(x => { // anything on court for them goes back
         const m = comp.meetings.find(mm => mm.id === x.meetingId);
         if (x.status === "onCourt" && x.entryIds && (x.entryIds.A === e.id || x.entryIds.B === e.id)) CompStandings.resetMatch(x);
@@ -284,9 +303,9 @@ const CompUI = (function () {
       if (comp.log.length > 200) comp.log.shift();
       CompStandings.clearStale(comp);
       CompStore.save(comp); CompShell.render();
-      CompShell.toastUndo(esc(t("entries.withdrawnToast", { pair: e.label })));
+      CompShell.toastUndo(esc(t("entries.withdrawnToast", { pair: label })));
     };
-    cmxShowModal({ title: t("entries.withdraw"), bodyHTML: cmxMsgHtml(t("entries.withdraw.q", { pair: e.label })), buttons: [
+    cmxShowModal({ title: t("entries.withdraw"), bodyHTML: cmxMsgHtml(t("entries.withdraw.q", { pair: label })), buttons: [
       { label: t("entries.withdraw.wo") + " (" + t("wiz.recommended") + ")", cls: "primary", onClick: function () { run("walkover"); } },
       { label: t("entries.withdraw.void"), cls: "secondary", onClick: function () { run("void"); } },
       { label: t("wiz.close"), cls: "ghost", onClick: function () {} }] });
@@ -438,6 +457,7 @@ const CompUI = (function () {
     else if (a === "pairMenu") pairMenu(comp, b.dataset.id);
     else if (a === "redraw") redraw(comp);
     else if (a === "lateEntry") lateEntry(comp);
+    else if (CompTeamsUI.onClick(comp, a, b)) return true;
     else return false;
     return true;
   }
@@ -454,5 +474,6 @@ const CompUI = (function () {
     document.querySelectorAll("#compRoot .elapsed").forEach(el => { el.textContent = elapsed(Number(el.dataset.since)); });
   }
 
-  return { renderCourts, renderStandings, renderResults, renderEntries, onClick, onInput, tick, startMatch, sendBack, regenerateDivision, ui };
+  return { renderCourts, renderStandings, renderResults, renderEntries, onClick, onInput, tick, startMatch, sendBack, regenerateDivision, ui,
+    helpers: { seg, chips, playerNames, setsText, peopleDialog: function () { return peopleDialog.apply(null, arguments); }, withdraw: function (c, id) { return withdraw(c, id); } } };
 })();

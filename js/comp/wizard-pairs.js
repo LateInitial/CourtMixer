@@ -232,16 +232,29 @@
     else { copy.settings.formatPlan = "sameForAll"; copy.settings.stagePlan = { all: plan }; }
     const draw = CompGenerate.generateDraw(copy);
     const est = CompSchedule.estimate(copy, draw);
-    const per = {};
-    draw.meetings.forEach(m => {
-      [m.sideA.id, m.sideB.id].forEach(id => { if (id) per[id] = (per[id] || 0) + 1; });
-    });
-    const counts = copy.entries.filter(e => !e.withdrawn && e.divisionId).map(e => per[e.id] || 0);
-    return { est, draw, min: counts.length ? Math.min.apply(null, counts) : 0, max: counts.length ? Math.max.apply(null, counts) : 0 };
+    const range = matchRange(copy, draw);
+    return { est, draw, min: range.min, max: range.max };
   }
   // §6.2 step 9: the fairest format that fits the time available (RR -> groups+KO -> knockout).
+  // Fewest and most matches (meetings, for teams) an entrant can play: fixed fixtures, plus every
+  // knockout round for whoever reaches the final.
+  function matchRange(comp, draw) {
+    const per = {};
+    draw.meetings.forEach(m => [m.sideA.id, m.sideB.id].forEach(id => { if (id) per[id] = (per[id] || 0) + 1; }));
+    const koRounds = draw.stages.filter(s => s.type === "knockout").map(s => Math.log2(s.config.size || 2));
+    const direct = draw.stages.some(s => s.type === "knockout" && s.order === 0);
+    const counts = entrantIds(comp).map(id => per[id] || 0);
+    if (!counts.length) return { min: 0, max: 0 };
+    const extra = Math.max.apply(null, koRounds.concat([0]));
+    return { min: direct ? Math.min.apply(null, counts.map(c => Math.max(c, 1))) : Math.min.apply(null, counts),
+      max: direct ? extra : Math.max.apply(null, counts) + extra };
+  }
+  // Who the draw is between: pairs, or teams in a team competition.
+  function entrantIds(comp) {
+    return comp.kind === "teams" ? comp.teams.filter(tm => !tm.withdrawn).map(tm => tm.id) : comp.entries.filter(e => !e.withdrawn && e.divisionId).map(e => e.id);
+  }
   function recommendedFormat(comp, divId) {
-    if (comp.entries.filter(e => e.divisionId && !e.withdrawn).length < 2) return null;
+    if (entrantIds(comp).length < 2 || (comp.kind === "teams" && !(comp.settings.meetingTemplate || []).length)) return null;
     const budget = comp.settings.timeAvailable || 240;
     const order = ["roundRobin", "groups", "knockout"];
     for (const type of order) {
@@ -280,7 +293,7 @@
         est[ty] = trial(comp, p, divId);
       });
       h += optionList(comp, plan.type, rec, est);
-      if (!rec) h += '<div class="muted">' + esc(t("format.addPairs")) + "</div>";
+      if (!rec) h += '<div class="muted">' + esc(t(comp.kind === "teams" ? "format.addTeams" : "format.addPairs")) + "</div>";
       if (plan.type === "groups") {
         h += '<div class="wiz-row"><span class="wiz-label">' + esc(t("format.groupSize")) + "</span>" + U.stepper("groupSize", plan.groupSize || 4, 3, 6) + "</div>" +
           '<div class="wiz-row"><span class="wiz-label">' + esc(t("format.advance")) + "</span>" + U.stepper("advance", plan.advance || 2, 1, 4) + "</div>" +
@@ -315,7 +328,7 @@
     return U.optionList("fmtType", FORMATS.map(function (ty) {
       let desc = t("format." + ty + ".desc");
       if (LATER[ty]) desc = t("format.later", { phase: LATER[ty] });
-      else if (est[ty]) desc += " · " + t("format.estimate", { time: CompSchedule.fmtDuration(est[ty].est.minutes), min: est[ty].min, max: est[ty].max });
+      else if (est[ty]) desc += " · " + t(comp.kind === "teams" ? "format.estimate.teams" : "format.estimate", { time: CompSchedule.fmtDuration(est[ty].est.minutes), min: est[ty].min, max: est[ty].max });
       return { value: ty, label: t("format." + ty), desc: desc, recommended: ty === rec, disabled: !!LATER[ty] };
     }), selected);
   }
@@ -529,11 +542,8 @@
   function reviewNumbers(comp) {
     const draw = CompGenerate.generateDraw(comp);
     const est = CompSchedule.estimate(comp, draw);
-    const per = {};
-    draw.meetings.forEach(m => [m.sideA.id, m.sideB.id].forEach(id => { if (id) per[id] = (per[id] || 0) + 1; }));
-    const ko = draw.stages.filter(s => s.type === "knockout").length;
-    const counts = comp.entries.filter(e => !e.withdrawn && e.divisionId).map(e => per[e.id] || 0);
-    return { draw, est, min: counts.length ? Math.min.apply(null, counts) : 0, max: counts.length ? Math.max.apply(null, counts) : 0, ko };
+    const range = matchRange(comp, draw);
+    return { draw, est, min: range.min, max: range.max, ko: draw.stages.filter(s => s.type === "knockout").length };
   }
   function reviewCard(stepId, title, lines) {
     return '<div class="wiz-card"><div class="wiz-card-head"><span>' + esc(title) + '</span><button type="button" class="wiz-link" data-act="jump" data-step="' + stepId + '">' + esc(t("review.edit")) + "</button></div>" +
@@ -608,5 +618,6 @@
     return CompSchedule.estimate(c, CompGenerate.generateDraw(c));
   }
 
-  Wizard.pairsUtil = { addPair, removeEntry, parsePairs, ensureFormat, recommendedFormat, syncCourtNames, labelOf, defaultGenders };
+  Wizard.pairsUtil = { addPair, removeEntry, parsePairs, ensureFormat, recommendedFormat, syncCourtNames, labelOf, defaultGenders,
+    reviewCard, planText, entrantIds, matchRange, chips, seg, TB_ALL };
 })();

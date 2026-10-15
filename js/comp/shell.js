@@ -241,6 +241,7 @@ const CompShell = (function () {
     const row = (key, id, label, val) => '<label class="wiz-field"><span class="wiz-label">' + esc(label) + '</span><input class="wiz-input" maxlength="80" data-k="' + key + '" data-id="' + esc(id) + '" value="' + esc(val) + '"></label>';
     const body = row("comp", "", t("basics.name"), comp.name) +
       comp.divisions.map((d, i) => row("div", d.id, t("div.name", { n: i + 1 }), d.name)).join("") +
+      (comp.teams || []).map((tm, i) => row("team", tm.id, t("teams.name", { n: i + 1 }), tm.name)).join("") +
       comp.players.map(p => row("player", p.id, t("settings.player"), p.name)).join("");
     cmxShowModal({ title: t("settings.names"), bodyHTML: body, buttons: [
       { label: t("wiz.done"), cls: "primary", onClick: function (box) {
@@ -248,9 +249,10 @@ const CompShell = (function () {
           const v = inp.value.trim(); if (!v) return;
           if (inp.dataset.k === "comp") comp.name = v;
           else if (inp.dataset.k === "div") { const d = comp.divisions.find(x => x.id === inp.dataset.id); if (d) d.name = v; }
+          else if (inp.dataset.k === "team") { const tm = comp.teams.find(x => x.id === inp.dataset.id); if (tm) tm.name = v; }
           else { const p = comp.players.find(x => x.id === inp.dataset.id); if (p) p.name = v; }
         });
-        comp.entries.forEach(e => { e.label = Wizard.pairsUtil.labelOf(comp, e); });
+        if (comp.kind !== "teams") comp.entries.forEach(e => { e.label = Wizard.pairsUtil.labelOf(comp, e); }); // team pairs keep slot labels (A1)
         CompStore.save(comp); render();
       } },
       { label: t("wiz.cancel"), cls: "ghost", onClick: function () {} }] });
@@ -276,11 +278,12 @@ const CompShell = (function () {
   function showSettings() {
     cmxShowModal({ title: t("menu.settings"), bodyHTML: "", buttons: [
       { label: t("settings.names"), cls: "secondary", onClick: renameAll },
-      { label: Wizard.ui.stepName("standings"), cls: "secondary", onClick: function () { openSettingsStep("standings"); } },
+      { label: Wizard.ui.stepName("standings"), cls: "secondary", onClick: function () { openSettingsStep("standings"); } }].concat(CompStore.getActive().kind === "teams" ? [
+      { label: Wizard.ui.stepName("meetingWin"), cls: "secondary", onClick: function () { openSettingsStep("meetingWin"); } }] : []).concat([
       { label: Wizard.ui.stepName("courts"), cls: "secondary", onClick: function () { openSettingsStep("courts", courtsDone); } },
       { label: t("score.walkover.title"), cls: "secondary", onClick: walkoverSetting },
       { label: t("settings.setup"), cls: "secondary", onClick: backToSetup },
-      { label: t("wiz.close"), cls: "ghost", onClick: function () {} }] });
+      { label: t("wiz.close"), cls: "ghost", onClick: function () {} }]) });
   }
   function showSummary() {
     const comp = CompStore.getActive(), s = comp.settings, fs = s.matchFormats || {};

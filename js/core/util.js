@@ -3,7 +3,7 @@
 // all top-level declarations share one global scope, exactly as before the split.
 
 /* ===== CourtMixer core helpers ===== */
-const APP_VERSION = "1.11.0";
+const APP_VERSION = "1.12.0";
 function uid() {
   try { if (typeof crypto !== "undefined" && crypto.randomUUID) return crypto.randomUUID(); } catch (e) {}
   var b = null;

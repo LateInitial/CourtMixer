@@ -180,3 +180,20 @@
 .score-box { min-height: 48px; font-size: 22px; font-weight: 800; background: #f5f8ff; color: #1b2340; border: 1px solid #c8d5fb; }
 .score-tb { min-height: 40px; font-size: 16px; text-align: center; border: 1px solid #c8d5fb; border-radius: 8px; width: 100%; }
 .score-winner { padding: 8px 10px; border-radius: 10px; background: #e6f8ee; color: #1b7a4f; font-weight: 700; }
+
+/* ===== Phase 4: teams ===== */
+.wiz-rubber { display: grid; gap: 6px; padding: 8px 0; border-bottom: 1px solid #eef2fb; }
+.wiz-pair-n.wide { width: auto; min-width: 34px; font-weight: 700; color: #42506f; }
+.lineup-more { display: flex; align-items: center; gap: 8px; min-height: 40px; font-size: 13px; color: #42506f; }
+.st-row.st-row-teams { grid-template-columns: 34px minmax(0, 1fr) 30px 40px; }
+@media (min-width: 520px) { .st-row.st-row-teams { grid-template-columns: 34px minmax(0, 1fr) 30px 30px 30px 30px 40px 58px 58px; } }
+.res-meeting { display: grid; gap: 6px; }
+.res-meeting-head { display: grid; gap: 2px; width: 100%; text-align: left; background: transparent; color: #1b2340; padding: 0; min-height: 40px; font-weight: 500; }
+.res-score { font-size: 15px; overflow-wrap: anywhere; }
+.res-score .win { font-weight: 800; }
+.res-rubber { display: grid; grid-template-columns: minmax(44px, auto) 1fr; gap: 1px 8px; width: 100%; text-align: left; background: #f8faff; color: #1b2340; border: 1px solid #eef2fb; font-weight: 500; font-size: 13px; overflow-wrap: anywhere; }
+.res-rubber > span:not(.res-rubber-label) { grid-column: 2; }
+.res-rubber .res-rubber-label { grid-row: span 3; font-weight: 800; color: #42506f; overflow-wrap: normal; }
+.res-rubber .win { font-weight: 800; }
+.res-rubber.dead { opacity: .55; }
+.team-roster { font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }

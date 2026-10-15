@@ -343,6 +343,7 @@ function runSelfTests(){
     r.wizard.visited.start = true; r.name = "Team Battle"; r.sport = "padel";
     Wizard.next(r); Wizard.next(r); Wizard.next(r); // start -> basics -> type -> divisions
     eq("on step 4", r.wizard.currentStep, "divisions");
+    r.teams.forEach(tm => r.divisions.forEach(d => { for (let i = 0; i < 2; i++) Wizard.teamsUtil.addPlayer(r, tm.id, d.id, tm.name + d.name + i, "M", "regular"); }));
     eq("use recommended succeeds", Wizard.useRecommended(r), []);
     eq("lands on Review", r.wizard.currentStep, "review");
     ok("every step marked visited", Wizard.visibleSteps(r).every(id => r.wizard.visited[id]));
@@ -573,6 +574,99 @@ function runSelfTests(){
     });
     const VD = CompStandings.derive(vg);
     eq("a place left empty by a void withdrawal is a bye", VD.groupRankEntry(gA.id, 3), "BYE");
+
+    out.push("team competitions");
+    // Two teams, 3 divisions x 4 players, fixed pairs, template A1 A2 B1 B2 C1 C2, round robin.
+    const teamComp = (opts) => {
+      const c = CompModel.newCompetition({ name: "Teams" });
+      CompModel.applyPreset(c, opts.flexible ? "teamsFlexible" : "teamsFixed");
+      c.sport = "badminton";
+      CompModel.setDivisionCount(c, 3); CompModel.setTeamCount(c, 2);
+      c.teams.forEach(tm => c.divisions.forEach(d => { for (let i = 0; i < 4; i++) Wizard.teamsUtil.addPlayer(c, tm.id, d.id, tm.name + d.name + i, "M", "regular"); }));
+      Wizard.teamsUtil.addPlayer(c, c.teams[0].id, c.divisions[0].id, "Reserve Ray", "M", "reserve");
+      CompLineups.syncTeamEntries(c);
+      c.settings.meetingTemplate = CompLineups.buildTemplate(c);
+      c.settings.matchFormats = { main: F("bad1x21") };
+      c.settings.stagePlan = { all: CompModel.stagePlanFor(opts.ko ? "knockout" : "roundRobin") };
+      Object.assign(c.settings.standings.teams, opts.teams || {});
+      if (opts.dead) c.settings.deadRubbers = opts.dead;
+      if (opts.decider) c.settings.meetingTemplate.push({ id: "dec", order: 6, label: "Decider", divisionId: c.divisions[0].id, category: "open", isDecider: true, slot: null });
+      CompGenerate.applyDraw(c, CompGenerate.generateDraw(c)); c.status = "live";
+      return c;
+    };
+    // results: "AABBAB" etc. in rubber order; games 21-10 for each winner (or custom pairs)
+    const playMeeting = (c, pattern, scores) => {
+      const m = c.meetings[0], D0 = CompStandings.derive(c);
+      c.matches.filter(x => x.meetingId === m.id).sort((a, b) => a.order - b.order).forEach((x, i) => {
+        const w = pattern[i];
+        if (!w || w === "-") return;
+        const sc = scores && scores[i] || (w === "A" ? { a: 21, b: 10 } : { a: 10, b: 21 });
+        if (!x.sideA.playerIds.length) { x.sideA.playerIds = D0.playerIdsOf(x, "A"); x.sideB.playerIds = D0.playerIdsOf(x, "B"); }
+        CompResults.apply(c, x.id, { sets: [sc], winner: w });
+      });
+      return CompStandings.derive(c);
+    };
+    const T1 = teamComp({});
+    eq("template built from registered pairs", T1.settings.meetingTemplate.map(r => r.label), ["A1", "A2", "B1", "B2", "C1", "C2"]);
+    ok("each team has 2 pairs per division", T1.teams.every(tm => T1.entries.filter(e => e.teamId === tm.id).length === 6));
+    eq("one meeting, one match per rubber", [T1.meetings.length, T1.matches.length], [1, 6]);
+    const TD = CompStandings.derive(T1), x1 = T1.matches.find(x => x.order === 1);
+    eq("fixed pairs: A1 plays A1", TD.playerIdsOf(x1, "A"), T1.entries.find(e => e.teamId === TD.side(T1.meetings[0], "A") && e.label === "A1").playerIds);
+    let Dm = playMeeting(T1, "AABAA-");
+    ok("meeting result: 4 matches to 1 is decided before the last rubber", Dm.teamResult(T1.meetings[0]).decided && Dm.teamResult(T1.meetings[0]).winner === "A");
+    ok("play all (round robin default): the last rubber is still played", !Dm.outcome(T1.meetings[0]).done && Dm.rubberNeeded(T1.matches.find(x => x.order === 6)));
+    const T2 = teamComp({ dead: { groupStage: "stopWhenDecided", knockout: "stopWhenDecided" } });
+    Dm = playMeeting(T2, "AAAA--");
+    ok("stop when decided: remaining rubbers are dead and the meeting is done", Dm.outcome(T2.meetings[0]).done && T2.matches.filter(x => x.order > 4).every(x => !Dm.rubberNeeded(x)));
+    const ts2 = Dm.table(T2.stages[0].id, T2.stages[0].groups[0].id);
+    eq("meeting points: win 2, loss 0", ts2.map(r => r.points), [2, 0]);
+    // 3-3 splits
+    const split = (rule, scores, extra) => { const c = teamComp({ teams: { splitRule: rule }, decider: rule === "decider" }); return { c, D: playMeeting(c, "AAABBB" + (extra || ""), scores) }; };
+    const close = [{ a: 21, b: 19 }, { a: 21, b: 19 }, { a: 21, b: 19 }, { a: 10, b: 21 }, { a: 10, b: 21 }, { a: 10, b: 21 }];
+    let sp = split("totalGames", close);
+    eq("3-3, total points decide: B scored more", sp.D.outcome(sp.c.meetings[0]).winner, "B");
+    sp = split("totalGames");
+    eq("3-3, total points level too: a draw", sp.D.outcome(sp.c.meetings[0]).winner, "draw");
+    sp = split("draw", close);
+    eq("3-3, record a draw", sp.D.outcome(sp.c.meetings[0]).winner, "draw");
+    eq("draw = 1 meeting point each", sp.D.table(sp.c.stages[0].id, sp.c.stages[0].groups[0].id).map(r => r.points), [1, 1]);
+    sp = split("decider");
+    ok("3-3 with a decider: the decider becomes needed", !sp.D.outcome(sp.c.meetings[0]).done && sp.D.teamResult(sp.c.meetings[0]).needDecider && sp.D.rubberNeeded(sp.c.matches.find(x => x.rubberId === "dec")));
+    ok("the decider waits for a lineup", CompLineups.needed(sp.D).length === 2);
+    const spDec = split("decider", null, "B");
+    eq("decider decides", spDec.D.outcome(spDec.c.meetings[0]).winner, "B");
+    const nl = teamComp({ teams: { splitRule: "decider" }, decider: true }), nlD = playMeeting(nl, "AAAABB");
+    ok("decider not needed when the meeting isn't level", nlD.outcome(nl.meetings[0]).done && !nlD.rubberNeeded(nl.matches.find(x => x.rubberId === "dec")));
+    // match tally
+    const TT = teamComp({ teams: { resultMode: "tally" } }), TTD = playMeeting(TT, "AAAABB");
+    eq("match tally: points are matches won", TTD.table(TT.stages[0].id, TT.stages[0].groups[0].id).map(r => r.points), [4, 2]);
+    // flexible lineups and stats following the person
+    const TF = teamComp({ flexible: true });
+    const TFD = CompStandings.derive(TF), mf = TF.meetings[0];
+    ok("flexible: nothing is ready until lineups are in", CompSchedule.readyList(TFD).length === 0 && CompLineups.needed(TFD).length === 2);
+    const teamA = TFD.side(mf, "A"), ray = TF.players.find(p => p.name === "Reserve Ray");
+    const lineupFrom = (tid) => { const l = {}; TF.matches.filter(x => x.meetingId === mf.id).forEach(x => { const rb = TFD.rubberOf(x); l[x.rubberId] = TF.entries.find(e => e.teamId === tid && e.divisionId === rb.divisionId && e.slot === rb.slot).playerIds.slice(); }); return l; };
+    mf.lineupA = lineupFrom(teamA); mf.lineupB = lineupFrom(TFD.side(mf, "B"));
+    const a1 = TF.matches.find(x => x.order === 1), rayLineup = ray.teamId === teamA ? mf.lineupA : mf.lineupB;
+    const replaced = rayLineup[a1.rubberId][0];
+    rayLineup[a1.rubberId][0] = ray.id;
+    const TFD2 = CompStandings.derive(TF);
+    eq("all six rubbers ready once lineups are in", CompSchedule.readyList(TFD2).length >= 1, true);
+    CompUI.startMatch(TF, a1.id, TF.courts[0].id);
+    CompResults.apply(TF, a1.id, { sets: [{ a: 21, b: 15 }], winner: ray.teamId === teamA ? "A" : "B" });
+    ok("stats follow the reserve, not the replaced player", a1.sideA.playerIds.concat(a1.sideB.playerIds).indexOf(ray.id) !== -1 && a1.sideA.playerIds.concat(a1.sideB.playerIds).indexOf(replaced) === -1);
+    const chk = CompLineups.check(TF, mf, "A", { r1: [TF.players[0].id, TF.players[0].id] });
+    ok("lineup check: same player twice in a rubber is an error", chk.errors.length === 1);
+    // knockout level meeting needs a decision
+    const TK = teamComp({ ko: true, teams: { splitRule: "draw" } }), TKD = playMeeting(TK, "AAABBB");
+    ok("knockout 3-3 with level points: organiser decides", TKD.teamResult(TK.meetings[0]).needsDecision && !TKD.outcome(TK.meetings[0]).done);
+    TK.meetings[0].resultOverride = { winner: "B", reason: "organiser" };
+    eq("decision recorded", CompStandings.derive(TK).outcome(TK.meetings[0]).winner, "B");
+    // withdrawn team: every rubber is a walkover for the opponent
+    const TW2 = teamComp({ teams: { resultMode: "tally" } });
+    TW2.teams[0].withdrawn = true; TW2.teams[0].withdrawMode = "walkover";
+    const tw = CompStandings.derive(TW2).table(TW2.stages[0].id, TW2.stages[0].groups[0].id);
+    eq("withdrawn team: opponents get every match", tw.map(r => [r.points, r.matchDiff]), [[6, 6], [0, -6]]);
 
     out.push("use recommended, then generate");
     const ur = CompModel.newCompetition({ name: "Rec" });

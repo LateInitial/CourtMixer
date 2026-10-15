@@ -25,8 +25,11 @@ const CompSchedule = (function () {
     if (o.done) return false;
     const a = D.side(m, "A"), b = D.side(m, "B");
     if (!a || !b || a === "BYE" || b === "BYE") return false;
+    if (!D.rubberNeeded(x)) return false;                     // dead rubber / decider not needed
+    const pa = D.playerIdsOf(x, "A"), pb = D.playerIdsOf(x, "B");
+    if (pa.length < 2 || pb.length < 2) return false;         // lineup still needed
     busy = busy || busyPlayers(D);
-    return !D.playerIdsOf(x, "A").concat(D.playerIdsOf(x, "B")).some(p => busy[p]);
+    return !pa.concat(pb).some(p => busy[p]);
   }
 
   // How long each player has rested: matches finished (anywhere) since their last one ended.
@@ -106,6 +109,10 @@ const CompSchedule = (function () {
     }
     const waitingKo = open.find(x => { const m = D.meetingById[x.meetingId]; return !D.side(m, "A") || !D.side(m, "B"); });
     const busyOnly = open.find(x => { const m = D.meetingById[x.meetingId]; return x.status === "pending" && D.side(m, "A") && D.side(m, "B"); });
+    if (D.isTeams && typeof CompLineups !== "undefined") {
+      const need = CompLineups.needed(D)[0];
+      if (need) return t("courts.lineupNeeded", { match: D.sideLabel(need.meeting, "A") + " " + t("courts.vs") + " " + D.sideLabel(need.meeting, "B"), team: D.entryLabel(need.teamId) });
+    }
     if (busyOnly) return t("courts.playersBusy");
     if (waitingKo) return t("courts.waitingFor", { what: D.meetingLabel(D.meetingById[waitingKo.meetingId], false) });
     return t("courts.nothing");

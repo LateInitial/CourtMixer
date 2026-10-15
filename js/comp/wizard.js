@@ -9,11 +9,13 @@ const Wizard = (function () {
                  "format", "scoring", "standings", "courts", "review"];
   const TEAMS_ONLY = { teams: true, template: true, meetingWin: true };
   // Steps not built yet, per competition type (the phase that brings them).
-  const PLACEHOLDER = { pairs: {}, teams: { entries: 4, template: 4, meetingWin: 4 } };
+  const PLACEHOLDER = { pairs: {}, teams: {} };
   function placeholderPhase(comp, id) { return (PLACEHOLDER[comp.kind] || {})[id] || 0; }
   // Steps registered by other files (wizard-pairs.js): { body, validate, recommend, act, input, change }
   const EXT = {};
-  function register(id, def) { EXT[id] = def; }
+  // kind: "pairs" or "teams" registers a type-specific version of a step (it wins over the shared one).
+  function register(id, def, kind) { EXT[kind ? kind + ":" + id : id] = def; }
+  function extOf(c, id) { return EXT[c.kind + ":" + id] || EXT[id]; }
   // Which later steps an answer on this step can affect (§6.1 invalidation).
   const AFFECTS = {
     start: ["type", "divisions", "teams", "template", "format"],
@@ -48,7 +50,7 @@ const Wizard = (function () {
   // Errors block Next; they are strings-table keys.
   function validate(comp, id) {
     const errs = [];
-    if (EXT[id] && EXT[id].validate && !placeholderPhase(comp, id)) EXT[id].validate(comp).forEach(e => errs.push(e));
+    if (extOf(comp, id) && extOf(comp, id).validate && !placeholderPhase(comp, id)) extOf(comp, id).validate(comp).forEach(e => errs.push(e));
     if (id === "basics") {
       if (!String(comp.name || "").trim()) errs.push("wiz.err.name");
       if (!/^\d{4}-\d{2}-\d{2}$/.test(comp.dateISO || "")) errs.push("wiz.err.date");
@@ -90,7 +92,7 @@ const Wizard = (function () {
   function applyRecommended(comp, id) {
     if (id === "divisions" && comp.divisions.length === 0) CompModel.setDivisionCount(comp, CompModel.recommendedDivisionCount(comp.kind));
     if (id === "teams" && comp.teams.length < CompModel.MIN_TEAMS) CompModel.setTeamCount(comp, 4);
-    if (EXT[id] && EXT[id].recommend) EXT[id].recommend(comp);
+    if (extOf(comp, id) && extOf(comp, id).recommend) extOf(comp, id).recommend(comp);
   }
   // Fills every remaining step the user hasn't answered yet, then goes to Review. Steps the
   // user already visited keep their answers.
@@ -223,7 +225,7 @@ const Wizard = (function () {
   }
   function bodyOf(id) {
     if (placeholderPhase(comp, id)) return placeholderBody(id);
-    if (EXT[id] && EXT[id].body) return EXT[id].body(comp);
+    if (extOf(comp, id) && extOf(comp, id).body) return extOf(comp, id).body(comp);
     return BODY[id] ? BODY[id]() : placeholderBody(id);
   }
 
@@ -312,7 +314,7 @@ const Wizard = (function () {
     }
     else if (act === "teamColor") { comp.teams[Number(el.dataset.idx)].color = el.dataset.value || null; rerender(); }
     else if (act === "pick") pick(el.dataset.group, el.dataset.value);
-    else { const ext = EXT[activeStep()]; if (ext && ext.act) ext.act(comp, act, el); }
+    else { const ext = extOf(comp, activeStep()); if (ext && ext.act) ext.act(comp, act, el); }
   }
 
   function pick(group, value) {
@@ -331,7 +333,7 @@ const Wizard = (function () {
     else if (group === "sport") { if (value !== comp.sport) change("basics", () => { comp.sport = value; if (!comp.wizard.visited.scoring && EXT.scoring && EXT.scoring.recommend) { comp.settings.matchFormats = {}; EXT.scoring.recommend(comp); } }); }
     else if (group === "kind") { if (value !== comp.kind) change("type", () => { comp.kind = value; if (value === "teams" && comp.teams.length < CompModel.MIN_TEAMS && !comp.wizard.visited.teams) CompModel.setTeamCount(comp, 4); }); }
     else if (group === "naming") { CompModel.renameDivisions(comp, value); rerender(); }
-    else { const ext = EXT[activeStep()]; if (ext && ext.act) ext.act(comp, "pick", null, group, value); }
+    else { const ext = extOf(comp, activeStep()); if (ext && ext.act) ext.act(comp, "pick", null, group, value); }
   }
 
   // Text and select fields save as you type, without re-rendering (keeps the keyboard open).
@@ -343,7 +345,7 @@ const Wizard = (function () {
     else if (f === "dateISO") comp.dateISO = el.value;
     else if (f === "divName") { comp.divisions[i].name = el.value; if (comp.settings.divisionNaming !== "custom") comp.settings.divisionNaming = "custom"; }
     else if (f === "teamName") comp.teams[i].name = el.value;
-    else { const ext = EXT[activeStep()]; if (!ext || !ext.input || ext.input(comp, f, el) === false) return; }
+    else { const ext = extOf(comp, activeStep()); if (!ext || !ext.input || ext.input(comp, f, el) === false) return; }
     persist();
     if (typeof CompShell !== "undefined") CompShell.renderBand();
   }
@@ -351,7 +353,7 @@ const Wizard = (function () {
     const el = e.target;
     if (!host.querySelector(".wiz")) return;
     if (el.dataset && el.dataset.field && el.dataset.field !== "divCategory") {
-      const ext = EXT[activeStep()];
+      const ext = extOf(comp, activeStep());
       if (ext && ext.change) ext.change(comp, el.dataset.field, el);
       return;
     }
