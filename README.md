@@ -2,7 +2,7 @@
 
 A simple, self-contained matchmaking app for social **court sports** — badminton, tennis, or padel. Add your players and it generates fair, balanced doubles matches round after round — handling skill balance, rest rotation, game-count fairness, and repeat-pairing avoidance. It runs entirely in the browser with no accounts, no server, and no internet needed after the page loads.
 
-**Live app:** https://lateinitial.github.io/CourtMixer/
+**Live app:** https://courtmixer.late-initial.workers.dev/ (cloud sync included). The old address, https://lateinitial.github.io/CourtMixer/, still works and offers to move your data across.
 
 ## Features
 
