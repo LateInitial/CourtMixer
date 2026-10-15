@@ -144,6 +144,124 @@ function runSelfTests(){
     recomputeStatsFromHistory();
   }
 
+  // ===== Phase 1: storage layer =====
+  // Every test below runs against an in-memory mock, never the real localStorage.
+  const mockStorage = (init) => {
+    const m = new Map(Object.entries(init || {}));
+    return {
+      getItem: (k) => m.has(k) ? m.get(k) : null,
+      setItem: (k, v) => { m.set(k, String(v)); },
+      removeItem: (k) => { m.delete(k); },
+      key: (i) => { const k = Array.from(m.keys())[i]; return k === undefined ? null : k; },
+      get length() { return m.size; },
+      _map: m
+    };
+  };
+  const throwing = { getItem() { throw new Error("blocked"); }, setItem() { throw new Error("blocked"); },
+    removeItem() { throw new Error("blocked"); }, key() { throw new Error("blocked"); }, get length() { throw new Error("blocked"); } };
+  // Key-order-insensitive JSON, so "same data" doesn't depend on property order.
+  const canon = (v) => Array.isArray(v) ? "[" + v.map(canon).join(",") + "]"
+    : (v && typeof v === "object") ? "{" + Object.keys(v).sort().map(k => JSON.stringify(k) + ":" + canon(v[k])).join(",") + "}"
+    : JSON.stringify(v);
+  const canonStr = (s) => { try { return canon(JSON.parse(s)); } catch (e) { return s; } };
+
+  out.push("Store");
+  const _realBackend = Store._useBackend(throwing);
+  try {
+    eq("throwing storage: get -> null", Store.get("courtmixer_players"), null);
+    eq("throwing storage: set -> false", Store.set("k", "v"), false);
+    ok("throwing storage: remove does not throw", (function () { try { Store.remove("k"); return true; } catch (e) { return false; } })());
+    eq("throwing storage: getJSON -> fallback", Store.getJSON("k", [1]), [1]);
+    eq("throwing storage: setJSON -> false", Store.setJSON("k", { a: 1 }), false);
+    eq("throwing storage: keys -> []", Store.keys("courtmixer_"), []);
+    eq("throwing storage: available -> false", Store.available(), false);
+
+    Store._useBackend(mockStorage({ "courtmixer_a": "1", "courtmixer_b": "{bad json", "other": "x" }));
+    eq("available on working storage", Store.available(), true);
+    ok("set then get round-trips", Store.set("courtmixer_c", "hello") && Store.get("courtmixer_c") === "hello");
+    eq("getJSON parse error -> fallback", Store.getJSON("courtmixer_b", "fb"), "fb");
+    eq("getJSON missing -> fallback", Store.getJSON("nope", null), null);
+    ok("setJSON then getJSON round-trips", Store.setJSON("courtmixer_d", { x: [1, 2] }) && canon(Store.getJSON("courtmixer_d")) === canon({ x: [1, 2] }));
+    eq("keys filters by prefix", Store.keys("courtmixer_"), ["courtmixer_a", "courtmixer_b", "courtmixer_c", "courtmixer_d"]);
+    Store.remove("courtmixer_a");
+    eq("remove deletes the key", Store.get("courtmixer_a"), null);
+  } finally { Store._useBackend(_realBackend); }
+
+  out.push("Docs");
+  Store._useBackend(mockStorage());
+  try {
+    ok("valid: social", Docs.valid("social"));
+    ok("valid: comp:<id>", Docs.valid("comp:abc-123"));
+    ok("rejects bad keys", !Docs.valid("comp:") && !Docs.valid("comp:a b") && !Docs.valid("players") && !Docs.valid("comp:" + "x".repeat(65)));
+    ok("rejects reserved comp ids", !Docs.valid("comp:index") && !Docs.valid("comp:active"));
+    ok("comp doc put", Docs.put("comp:t1", { id: "t1", name: "Cup" }));
+    eq("comp doc get", (Docs.get("comp:t1") || {}).name, "Cup");
+    eq("comp doc stored under courtmixer_comp_<id>", Store.getJSON("courtmixer_comp_t1", {}).id, "t1");
+    eq("list has social and the comp", Docs.list(), ["social", "comp:t1"]);
+    eq("missing comp -> null", Docs.get("comp:none"), null);
+    eq("meta defaults", Docs.meta("comp:t1"), { updatedAt: 0, localVersion: 0, serverVersion: 0, dirty: false });
+    Docs.setMeta("comp:t1", { dirty: true, localVersion: 2 });
+    eq("setMeta merges", Docs.meta("comp:t1"), { updatedAt: 0, localVersion: 2, serverVersion: 0, dirty: true });
+    ok("remove comp doc", Docs.remove("comp:t1") && Docs.get("comp:t1") === null && Docs.meta("comp:t1").dirty === false);
+    ok("social doc cannot be removed", Docs.remove("social") === false);
+  } finally { Store._useBackend(_realBackend); }
+
+  out.push("Docs social round-trip (sandboxed)");
+  {
+    const keep = { players, matchHistory, seen: Array.from(seenPairings), courtCount, scoringStyle, matchmakingMode,
+      customDefaults, sessionName, sessionDate, courtSlots, courtSlotManual, courtMode };
+    const sni = document.getElementById("sessionNameInput"), sniVal = sni ? sni.value : null;
+    const mock = mockStorage();
+    Store._useBackend(mock);
+    try {
+      // A session with everything an export leaves out: pending lineup, manual slots, court
+      // mode, priority/skip locks, no saved default roster, and a live match on court 2.
+      const P = (id, name, g, skill) => ({ id, name, gender: g, skill, matches: 0, wins: 0, points: 0, priority: false, skip: false, priorityLock: false, skipLock: false, pointsDiff: 0, rawPoints: 0 });
+      players = [P("p1", "Ann", "F", 5), P("p2", "Ben", "M", null), P("p3", "Cy", "M", 6.5), P("p4", "Di", "F", 4),
+                 P("p5", "Ed", "M", 3), P("p6", "Flo", "F", 7), P("p7", "Gus", "M", 5), P("p8", "Hal", "M", 5)];
+      players[0].priority = true; players[1].skipLock = true; players[1].skip = true;
+      matchHistory = [
+        { id: "m1", time: "10:00", pairA: ["Ann", "Ben"], pairB: ["Cy", "Di"], pairAIds: ["p1", "p2"], pairBIds: ["p3", "p4"], pairDelta: 0.5, repeated: false, scoreA: 21, scoreB: 17, closed: false, court: 1, category: "XD" },
+        { id: "m2", time: "10:20", pairA: ["Ed", "Flo"], pairB: ["Gus", "Hal"], pairAIds: ["p5", "p6"], pairBIds: ["p7", "p8"], pairDelta: 0, repeated: false, scoreA: null, scoreB: null, closed: false, court: 2, category: null }
+      ];
+      seenPairings.clear(); seenPairings.add(pairKey(["p1", "p2"], ["p3", "p4"]));
+      courtCount = 2; scoringStyle = "league"; matchmakingMode = "mexicano"; customDefaults = null;
+      sessionName = "Round-trip test"; sessionDate = "2026-10-15";
+      courtSlots = EMPTY_SLOTS(); courtSlots[1] = ["p1", "p3", null, "p4"];
+      courtSlotManual = EMPTY_MANUAL(); courtSlotManual[1] = [true, false, false, true];
+      courtMode = { 1: "XD", 2: "", 3: "", 4: "" };
+      recomputeStatsFromHistory();
+      save(); saveCourts();
+
+      const before = {}; mock._map.forEach((v, k) => { before[k] = canonStr(v); });
+      const stateOf = () => canon({ players, matchHistory, seen: Array.from(seenPairings).sort(), courtCount, scoringStyle, matchmakingMode, customDefaults, sessionName, sessionDate, courtSlots, courtSlotManual, courtMode });
+      const memBefore = stateOf();
+
+      const doc = Docs.get("social");
+      ok("social doc is the export payload", !!doc && doc.app === "CourtMixer" && doc.type === "session" && Array.isArray(doc.history));
+      const exportKeys = Object.keys(buildSessionPayload()).sort().join(",");
+      eq("exports carry no 'local' block", Object.keys(buildSessionPayload()).indexOf("local"), -1);
+      ok("Docs.put('social') succeeds", Docs.put("social", JSON.parse(JSON.stringify(doc))));
+      eq("export keys unchanged after round-trip", Object.keys(buildSessionPayload()).sort().join(","), exportKeys);
+      ok("in-memory social state unchanged after round-trip", stateOf() === memBefore);
+      const after = {}; mock._map.forEach((v, k) => { after[k] = canonStr(v); });
+      const changed = Object.keys(Object.assign({}, before, after)).filter(k => before[k] !== after[k]);
+      eq("stored social keys unchanged after round-trip", changed, []);
+      ok("Docs.put('social') rejects junk", Docs.put("social", { app: "Other" }) === false);
+    } finally {
+      Store._useBackend(_realBackend);
+      players = keep.players; matchHistory = keep.matchHistory;
+      seenPairings.clear(); keep.seen.forEach(k => seenPairings.add(k));
+      courtCount = keep.courtCount; scoringStyle = keep.scoringStyle; matchmakingMode = keep.matchmakingMode;
+      customDefaults = keep.customDefaults; sessionName = keep.sessionName; sessionDate = keep.sessionDate;
+      courtSlots = keep.courtSlots; courtSlotManual = keep.courtSlotManual; courtMode = keep.courtMode;
+      if (sni) sni.value = sniVal;
+      recomputeStatsFromHistory();
+      updateMatchToolbar(); updateDefaultButtons();
+      renderPlayers(); renderMatch(); renderHistory(); renderLeaderboard(); renderStats();
+    }
+  }
+
   const el = document.createElement("div");
   el.className = "selftest-out";
   el.textContent = "CourtMixer v" + APP_VERSION + " self-tests\n" + pass + " passed, " + fail + " failed\n\n" + out.join("\n") + "\n\n(tap to close)";

@@ -1,9 +1,9 @@
-// CourtMixer - core helpers: version, ids, escaping, storage access, seeded random
+// CourtMixer - core helpers: version, ids, escaping, seeded random (storage access is in store.js)
 // Moved verbatim from index.html in Phase 0 (v1.9.0). Loaded as a classic script;
 // all top-level declarations share one global scope, exactly as before the split.
 
 /* ===== CourtMixer core helpers ===== */
-const APP_VERSION = "1.9.0";
+const APP_VERSION = "1.9.1";
 function uid() {
   try { if (typeof crypto !== "undefined" && crypto.randomUUID) return crypto.randomUUID(); } catch (e) {}
   var b = null;
@@ -14,12 +14,6 @@ function uid() {
   return h.slice(0, 4).join("") + "-" + h.slice(4, 6).join("") + "-" + h.slice(6, 8).join("") + "-" + h.slice(8, 10).join("") + "-" + h.slice(10, 16).join("");
 }
 // Single escaper for every place a name or free-text value is interpolated into HTML.
-// localStorage can THROW on read as well as write (data: URLs, sandboxed frames, some
-// privacy modes). An unguarded read at the top of the script used to abort the whole file
-// and leave a blank shell, so every access goes through these.
-function lsGet(key) { try { return localStorage.getItem(key); } catch (e) { return null; } }
-function lsSet(key, val) { try { localStorage.setItem(key, val); return true; } catch (e) { return false; } }
-function lsDel(key) { try { localStorage.removeItem(key); } catch (e) {} }
 const ESC_MAP = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
 function esc(v) { return String(v == null ? "" : v).replace(/[&<>"']/g, function (c) { return ESC_MAP[c]; }); }
 function nm(v) { return "<strong>" + esc(v == null ? "?" : v) + "</strong>"; }

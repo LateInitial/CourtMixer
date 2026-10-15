@@ -90,7 +90,7 @@ for (let c = n + 1; c <= courtCount; c++) if (getLiveMatchForCourt(c)) busyCourt
 if (busyCourts.length) return cmxAlert(`Court ${busyCourts.join(", ")} still has a match in progress.\n\nFinish it (with or without a score) before reducing the number of courts.`);
 }
 courtCount = n;
-lsSet("courtmixer_court_count", String(n));
+Store.set("courtmixer_court_count", String(n));
 clearCourtsAbove(courtCount);
 updateMatchToolbar();
 renderMatch();
@@ -130,7 +130,8 @@ if (!players.length) return cmxAlert("Add some players first, then save them as 
 cmxConfirm({ title: "Save as default", yes: "Save",
 message: "Save the current roster (names, gender, skill) as your default?\n\nReset Data will then restore THIS roster instead of the built-in sample." }, () => {
 customDefaults = players.map(p => ({ name: p.name, gender: (p.gender === "F" ? "F" : "M"), skill: p.skill }));
-try { lsSet("courtmixer_custom_defaults", JSON.stringify(customDefaults)); } catch (e) {}
+try { Store.set("courtmixer_custom_defaults", JSON.stringify(customDefaults)); } catch (e) {}
+Sync.markDirty("social");
 updateDefaultButtons();
 showToast("Saved \u2014 Reset Data will now restore this roster.");
 });
@@ -145,7 +146,7 @@ updateDefaultButtons();
 const sessionNameInput = document.getElementById("sessionNameInput");
 if (sessionNameInput) {
 sessionNameInput.value = sessionName;
-sessionNameInput.addEventListener("input", (e) => { sessionName = e.target.value; lsSet("courtmixer_session_name", sessionName); });
+sessionNameInput.addEventListener("input", (e) => { sessionName = e.target.value; Store.set("courtmixer_session_name", sessionName); Sync.markDirty("social"); });
 }
 const shareLbBtn = document.getElementById("shareLbBtn");
 if (shareLbBtn) shareLbBtn.onclick = shareLeaderboardChooser;

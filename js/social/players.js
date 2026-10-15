@@ -70,8 +70,8 @@ renderPlayers();
 }
 
 function showPsHintOnce() {
-if (lsGet("courtmixer_ps_hint_seen")) return;
-lsSet("courtmixer_ps_hint_seen", "1");
+if (Store.get("courtmixer_ps_hint_seen")) return;
+Store.set("courtmixer_ps_hint_seen", "1");
 // Routed through showToast so the tip is swipe/tap/Escape dismissible like every other toast.
 showToast('<strong>Tip —</strong> a ✓ lasts for the next game only. Press &amp; hold the box to 🔒 lock a player until you clear it.', false, 7000);
 }

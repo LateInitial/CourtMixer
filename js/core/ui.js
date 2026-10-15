@@ -135,7 +135,7 @@ function undoLast(){
   matchmakingMode = u.matchmakingMode; courtCount = u.courtCount; customDefaults = u.customDefaults;
   editingId = null; editTableMode = false; sortState = { col: null, dir: 1 };
   for (let c = 1; c <= MAX_COURTS; c++) courtRerollSeen[c].clear();
-  if (customDefaults) { try { lsSet("courtmixer_custom_defaults", JSON.stringify(customDefaults)); } catch (e) {} }
+  if (customDefaults) { try { Store.set("courtmixer_custom_defaults", JSON.stringify(customDefaults)); } catch (e) {} }
   const sni = document.getElementById("sessionNameInput"); if (sni) sni.value = sessionName;
   const eb = document.getElementById("editModeBtn"); if (eb) { eb.textContent = "Edit"; eb.classList.remove("active-edit"); }
   recomputeStatsFromHistory();

@@ -34,14 +34,14 @@ function skillOf(p){ return isUnrated(p) ? UNRATED_SKILL : Number(p.skill); }
 function fmtSkill(p){ return isUnrated(p) ? "U" : Number(p.skill).toFixed(1); }
 function normSkillInput(v){ const t = String(v == null ? "" : v).trim(); if (t === "" || /^u$/i.test(t)) return null; const n = Number(t); return Number.isFinite(n) ? n : NaN; }
 function normSkillData(v){ if (v === null || v === undefined || v === "") return null; const n = Number(v); return Number.isFinite(n) ? n : null; }
-let players = (function () { try { return JSON.parse(lsGet("courtmixer_players") || "null") || []; } catch (e) { return []; } })();
+let players = (function () { try { return JSON.parse(Store.get("courtmixer_players") || "null") || []; } catch (e) { return []; } })();
 // Migrate: ensure wins field exists
 players.forEach(p => { if (p.wins === undefined) p.wins = 0; if (p.points === undefined) p.points = 0; if (p.gender === undefined) p.gender = "M"; if (p.priorityLock === undefined) p.priorityLock = false; if (p.skipLock === undefined) p.skipLock = false; if (p.pointsDiff === undefined) p.pointsDiff = 0; if (p.rawPoints === undefined) p.rawPoints = 0; });
-let matchHistory = (function () { try { const v = JSON.parse(lsGet("courtmixer_history") || "[]"); return Array.isArray(v) ? v : []; } catch (e) { return []; } })();
+let matchHistory = (function () { try { const v = JSON.parse(Store.get("courtmixer_history") || "[]"); return Array.isArray(v) ? v : []; } catch (e) { return []; } })();
 matchHistory.forEach(h => { if (h.closed === undefined) h.closed = false; });
 const MAX_COURTS = 4;
 let courtCount = (() => {
-const v = parseInt(lsGet("courtmixer_court_count") || "1", 10);
+const v = parseInt(Store.get("courtmixer_court_count") || "1", 10);
 return v >= 1 && v <= MAX_COURTS ? v : 1;
 })();
 // A live match on a court above courtCount would be unreachable from the Match tab, so
@@ -49,15 +49,15 @@ return v >= 1 && v <= MAX_COURTS ? v : 1;
 (() => {
   let mx = courtCount;
   matchHistory.forEach(h => { if (isMatchLive(h) && h.court && h.court > mx && h.court <= MAX_COURTS) mx = h.court; });
-  if (mx !== courtCount) { courtCount = mx; try { lsSet("courtmixer_court_count", String(courtCount)); } catch (e) {} }
+  if (mx !== courtCount) { courtCount = mx; try { Store.set("courtmixer_court_count", String(courtCount)); } catch (e) {} }
 })();
-let scoringStyle = (() => { const v = lsGet("courtmixer_scoring_style"); return ["points","adjpts","league","ptspergp"].includes(v) ? v : "points"; })();
+let scoringStyle = (() => { const v = Store.get("courtmixer_scoring_style"); return ["points","adjpts","league","ptspergp"].includes(v) ? v : "points"; })();
 const todayISO = () => { const d = new Date(); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); };
 const fmtSessionDate = (iso) => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || ""); const d = m ? new Date(+m[1], +m[2] - 1, +m[3]) : new Date(); return d.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" }); };
-let sessionName = lsGet("courtmixer_session_name") || "";
-let sessionDate = lsGet("courtmixer_session_date") || "";
-if (!/^\d{4}-\d{2}-\d{2}$/.test(sessionDate)) { sessionDate = todayISO(); lsSet("courtmixer_session_date", sessionDate); }
-let matchmakingMode = lsGet("courtmixer_matchmaking") === "mexicano" ? "mexicano" : "americano";
+let sessionName = Store.get("courtmixer_session_name") || "";
+let sessionDate = Store.get("courtmixer_session_date") || "";
+if (!/^\d{4}-\d{2}-\d{2}$/.test(sessionDate)) { sessionDate = todayISO(); Store.set("courtmixer_session_date", sessionDate); }
+let matchmakingMode = Store.get("courtmixer_matchmaking") === "mexicano" ? "mexicano" : "americano";
 const LEAGUE_WIN_PTS = 3;
 const LEAGUE_DRAW_PTS = 1;
 const LEAGUE_LOSS_PTS = 1;
@@ -69,7 +69,7 @@ const EMPTY_MANUAL = () => ({ 1:[false,false,false,false], 2:[false,false,false,
 // background tab refresh was the most annoying data loss in earlier builds.
 function loadSlotState(key, empty, coerce) {
   try {
-    const v = JSON.parse(lsGet(key) || "null");
+    const v = JSON.parse(Store.get(key) || "null");
     if (!v || typeof v !== "object") return empty();
     const out = empty();
     for (let c = 1; c <= MAX_COURTS; c++) {
@@ -81,14 +81,14 @@ function loadSlotState(key, empty, coerce) {
 }
 let courtSlots = loadSlotState("courtmixer_court_slots", EMPTY_SLOTS, (x) => (typeof x === "string" && x) ? x : null);
 let courtSlotManual = loadSlotState("courtmixer_court_manual", EMPTY_MANUAL, (x) => x === true);
-let courtMode = (() => { try { const v = JSON.parse(lsGet("courtmixer_court_modes") || "null"); return (v && typeof v === "object") ? {1:v[1]||"",2:v[2]||"",3:v[3]||"",4:v[4]||""} : {1:"",2:"",3:"",4:""}; } catch(e) { return {1:"",2:"",3:"",4:""}; } })();
+let courtMode = (() => { try { const v = JSON.parse(Store.get("courtmixer_court_modes") || "null"); return (v && typeof v === "object") ? {1:v[1]||"",2:v[2]||"",3:v[3]||"",4:v[4]||""} : {1:"",2:"",3:"",4:""}; } catch(e) { return {1:"",2:"",3:"",4:""}; } })();
 const courtRerollSeen = { 1: new Set(), 2: new Set(), 3: new Set(), 4: new Set() };
 function saveCourts() {
-  try {
-    localStorage.setItem("courtmixer_court_modes", JSON.stringify(courtMode));
-    localStorage.setItem("courtmixer_court_slots", JSON.stringify(courtSlots));
-    localStorage.setItem("courtmixer_court_manual", JSON.stringify(courtSlotManual));
-  } catch (e) { /* storage blocked - save() already warned */ }
+  // Stops at the first failed write, as before; storage blocked - save() already warned.
+  Store.set("courtmixer_court_modes", JSON.stringify(courtMode)) &&
+  Store.set("courtmixer_court_slots", JSON.stringify(courtSlots)) &&
+  Store.set("courtmixer_court_manual", JSON.stringify(courtSlotManual));
+  Sync.markDirty("social");
 }
 
 function clearCourtsAbove(n) {
@@ -145,22 +145,22 @@ let editTableMode = false;
 let sortState = { col: null, dir: 1 };
 let statsSortState = { col: null, dir: 1 };
 let selectedGender = "M";
-let customDefaults = (function () { try { return JSON.parse(lsGet("courtmixer_custom_defaults") || "null"); } catch (e) { return null; } })();
+let customDefaults = (function () { try { return JSON.parse(Store.get("courtmixer_custom_defaults") || "null"); } catch (e) { return null; } })();
 
-const seenPairings = new Set((function () { try { const v = JSON.parse(lsGet("courtmixer_seen") || "[]"); return Array.isArray(v) ? v : []; } catch (e) { return []; } })());
+const seenPairings = new Set((function () { try { const v = JSON.parse(Store.get("courtmixer_seen") || "[]"); return Array.isArray(v) ? v : []; } catch (e) { return []; } })());
 const byId = (id) => players.find(p => p.id === id);
 let _storageWarned = false;
 const save = () => {
-try {
-localStorage.setItem("courtmixer_players", JSON.stringify(players));
-localStorage.setItem("courtmixer_history", JSON.stringify(matchHistory));
-localStorage.setItem("courtmixer_seen", JSON.stringify(Array.from(seenPairings)));
-localStorage.setItem("courtmixer_court_count", String(courtCount));
-localStorage.setItem("courtmixer_scoring_style", scoringStyle);
-localStorage.setItem("courtmixer_matchmaking", matchmakingMode);
-localStorage.setItem("courtmixer_session_name", sessionName);
-localStorage.setItem("courtmixer_session_date", sessionDate);
-} catch (e) {
-if (!_storageWarned) { _storageWarned = true; cmxAlert("This browser is blocking local storage (e.g. Private Browsing), so changes can't be saved automatically. Use Edit \u25b8 Export to back up your data."); }
-}
+// Stops at the first failed write, exactly as the old try/catch around setItem did.
+const ok =
+Store.set("courtmixer_players", JSON.stringify(players)) &&
+Store.set("courtmixer_history", JSON.stringify(matchHistory)) &&
+Store.set("courtmixer_seen", JSON.stringify(Array.from(seenPairings))) &&
+Store.set("courtmixer_court_count", String(courtCount)) &&
+Store.set("courtmixer_scoring_style", scoringStyle) &&
+Store.set("courtmixer_matchmaking", matchmakingMode) &&
+Store.set("courtmixer_session_name", sessionName) &&
+Store.set("courtmixer_session_date", sessionDate);
+if (!ok && !_storageWarned) { _storageWarned = true; cmxAlert("This browser is blocking local storage (e.g. Private Browsing), so changes can't be saved automatically. Use Edit \u25b8 Export to back up your data."); }
+Sync.markDirty("social");
 };

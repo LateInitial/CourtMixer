@@ -30,9 +30,9 @@ courtMode = { 1:"", 2:"", 3:"", 4:"" };
 saveCourts();
 for (let c = 1; c <= MAX_COURTS; c++) courtRerollSeen[c].clear();
 sortState = { col: null, dir: 1 };
-lsDel("courtmixer_ps_hint_seen");
+Store.remove("courtmixer_ps_hint_seen");
 sessionDate = todayISO();
-lsSet("courtmixer_session_date", sessionDate);
+Store.set("courtmixer_session_date", sessionDate);
 // Reset toolbar state too
 const toolbar = document.getElementById("toolbar");
 const addBtn = document.getElementById("addPlayerBtn");

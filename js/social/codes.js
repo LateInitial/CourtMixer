@@ -160,7 +160,7 @@ courtSlotManual = EMPTY_MANUAL();
 courtMode = { 1: "", 2: "", 3: "", 4: "" };
 for (let c = 1; c <= MAX_COURTS; c++) courtRerollSeen[c].clear();
 editingId = null; editTableMode = false; sortState = { col: null, dir: 1 };
-if (customDefaults) lsSet("courtmixer_custom_defaults", JSON.stringify(customDefaults)); else lsDel("courtmixer_custom_defaults");
+if (customDefaults) Store.set("courtmixer_custom_defaults", JSON.stringify(customDefaults)); else Store.remove("courtmixer_custom_defaults");
 recomputeStatsFromHistory();
 save(); saveCourts();
 const sni = document.getElementById("sessionNameInput"); if (sni) sni.value = sessionName;
