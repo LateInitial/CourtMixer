@@ -132,7 +132,7 @@ const CompUI = (function () {
     const stages = comp.stages.filter(s => D.isTeams || s.divisionId === ui.div).sort((a, b) => a.order - b.order);
     const views = [];
     stages.forEach(st => {
-      if (st.type === "knockout") views.push({ value: st.id + ":ko", label: t("standings.knockout"), st });
+      if (CompStandings.isKO(st)) views.push({ value: st.id + ":ko", label: t(st.type === "plate" ? "standings.plate" : "standings.knockout"), st });
       else st.groups.forEach(g => views.push({ value: st.id + ":" + g.id, label: st.type === "groups" ? t("standings.group", { g: g.name }) : t("standings.table"), st, g }));
     });
     if (!views.some(v => v.value === ui.group)) ui.group = views.length ? views[0].value : null;
@@ -146,7 +146,7 @@ const CompUI = (function () {
   function tableHtml(comp, D, st, g) {
     if (D.isTeams) return CompTeamsUI.tableHtml(D, st, g);
     const rows = D.table(st.id, g.id), f = D.formatFor(st), p = comp.settings.standings.pairs;
-    const showPts = p.rankBy !== "wins", showSets = f.sets > 1, unit = f.setType === "games" ? "games" : "points";
+    const showPts = p.rankBy !== "wins" || st.type === "pointsLeague", showSets = f.sets > 1, unit = f.setType === "games" ? "games" : "points";
     const sign = (n) => (n > 0 ? "+" : "") + n;
     let h = '<div class="card st-card"><div class="st-row st-head"><span>#</span><span class="st-name">' + esc(t("standings.entry")) + "</span>" +
       '<span class="st-x">' + esc(t("standings.p")) + "</span><span>" + esc(t("standings.w")) + '</span><span class="st-x">' + esc(t("standings.l")) + "</span>" +
@@ -303,6 +303,7 @@ const CompUI = (function () {
       comp.log.push({ at: Date.now(), action: "withdraw", entryId: e.id, mode });
       if (comp.log.length > 200) comp.log.shift();
       CompStandings.clearStale(comp);
+      CompGenerate.advance(comp);
       CompStore.save(comp); CompShell.render();
       CompShell.toastUndo(esc(t("entries.withdrawnToast", { pair: label })));
     };

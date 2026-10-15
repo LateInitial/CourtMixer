@@ -107,6 +107,14 @@ const CompSchedule = (function () {
         }
       }
     }
+    // a Swiss / points-league round is drawn when the one before it finishes: if everything left in
+    // the current round is already on court, say so
+    for (const st of comp.stages) {
+      if (!(st.config && st.config.rounds)) continue;
+      const ms = comp.meetings.filter(m => m.stageId === st.id), last = Math.max.apply(null, ms.map(m => m.round).concat([0]));
+      const left = open.filter(x => D.meetingById[x.meetingId].stageId === st.id);
+      if (last < st.config.rounds && left.length && left.every(x => x.status === "onCourt")) return t("courts.nextRoundLater", { next: last + 1, cur: last });
+    }
     const waitingKo = open.find(x => { const m = D.meetingById[x.meetingId]; return !D.side(m, "A") || !D.side(m, "B"); });
     const busyOnly = open.find(x => { const m = D.meetingById[x.meetingId]; return x.status === "pending" && D.side(m, "A") && D.side(m, "B"); });
     if (D.isTeams && typeof CompLineups !== "undefined") {
@@ -114,6 +122,7 @@ const CompSchedule = (function () {
       if (need) return t("courts.lineupNeeded", { match: D.sideLabel(need.meeting, "A") + " " + t("courts.vs") + " " + D.sideLabel(need.meeting, "B"), team: D.entryLabel(need.teamId) });
     }
     if (busyOnly) return t("courts.playersBusy");
+    if (open.every(x => x.status === "onCourt")) return t("courts.lastOnCourt");
     if (waitingKo) return t("courts.waitingFor", { what: D.meetingLabel(D.meetingById[waitingKo.meetingId], false) });
     return t("courts.nothing");
   }
@@ -169,7 +178,25 @@ const CompSchedule = (function () {
       }
       const allowed = s.courtMode === "dedicated" ? (s.courtAssign && s.courtAssign[x.divisionId]) || null : null;
       return { id: x.id, key: (st ? st.order : 0) * 1000 + m.round - (m.thirdPlace ? 0.5 : 0), idx: i, deps: depsOf(m, {}), players, per: perOf(st), allowed: allowed && allowed.length ? allowed : null };
-    }).sort((a, b) => a.key - b.key || a.idx - b.idx);
+    });
+    // Swiss / points-league rounds not drawn yet: about n/2 matches each, after the round before.
+    let laterMeetings = 0;
+    draw.stages.filter(st => st.config && st.config.rounds).forEach(function (st) {
+      const g = st.groups[0], n = g ? g.entryIds.length : 0, perRound = Math.floor(n / 2) * (teams ? (comp.settings.meetingTemplate || []).length || 1 : 1);
+      let prev = tasks.filter(tk => { const x = draw.matches.find(m => m.id === tk.id), m = x && meetings[x.meetingId]; return m && m.stageId === st.id; }).map(tk => tk.id);
+      const drawn = Math.max.apply(null, draw.meetings.filter(m => m.stageId === st.id).map(m => m.round).concat([0]));
+      for (let r = drawn + 1; r <= st.config.rounds; r++) {
+        const ids = [];
+        laterMeetings += Math.floor(n / 2);
+        for (let k = 0; k < perRound; k++) {
+          const id = "v:" + st.id + ":" + r + ":" + k;
+          tasks.push({ id, key: st.order * 1000 + r, idx: tasks.length, deps: prev.slice(), players: [], per: perOf(st), allowed: null });
+          ids.push(id);
+        }
+        prev = ids;
+      }
+    });
+    tasks.sort((a, b) => a.key - b.key || a.idx - b.idx);
     const end = {}, playerFree = {}, courtFree = new Array(courts).fill(0);
     let remaining = tasks.slice(), guard = 0, makespan = 0;
     while (remaining.length && guard++ < 100000) {
@@ -192,7 +219,9 @@ const CompSchedule = (function () {
       remaining.splice(remaining.indexOf(pick), 1);
     }
     const minutes = Math.max(0, makespan);
-    return { minutes: Math.round(minutes / 5) * 5, matches: draw.matches.length, complete: remaining.length === 0 };
+    // counts include the Swiss / points-league rounds that are drawn later
+    return { minutes: Math.round(minutes / 5) * 5, matches: draw.matches.length + tasks.filter(tk => String(tk.id).indexOf("v:") === 0).length,
+      meetings: draw.meetings.filter(m => !(m.sideA.source && m.sideA.source.kind === "bye") && !(m.sideB.source && m.sideB.source.kind === "bye")).length + laterMeetings, complete: remaining.length === 0 };
   }
 
   function minutesDefault(comp) {

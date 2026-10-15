@@ -13,11 +13,13 @@ const CompResults = (function () {
       if (stale.length) CompShell.snapshot(t("results.edit"), comp);
       apply(comp, matchId, result);
       const cleared = CompStandings.clearStale(comp);
+      const drawn = CompGenerate.advance(comp); // next Swiss / points-league round, if this finished one
       CompStore.save(comp);
       const after = completedGroups(comp).filter(k => before.indexOf(k) === -1);
       if (done) done();
       if (cleared.length) CompShell.toastUndo(esc(t("results.cleared", { n: cleared.length })));
       else if (after.length) showToast(esc(t("results.groupDone", { group: after.join(", ") })));
+      else if (drawn) showToast(esc(t("results.roundDrawn")));
     };
     if (!stale.length) { go(); return true; }
     const D = CompStandings.derive(comp);
@@ -54,6 +56,7 @@ const CompResults = (function () {
     CompShell.snapshot(t("results.delete"), comp);
     CompStandings.resetMatch(x);
     const cleared = CompStandings.clearStale(comp);
+    CompGenerate.advance(comp);
     CompStore.save(comp);
     CompShell.toastUndo(esc(t(cleared.length ? "results.deletedCleared" : "results.deleted", { n: cleared.length })));
   }
@@ -135,7 +138,7 @@ const CompScore = (function () {
       return { winner: state.side === "A" ? "B" : "A", errors: ev.errors, warnings: ev.warnings };
     }
     const ev = CompFormat.evaluateScore(f, sets);
-    const ko = (ctx().D.stageById[ctx().m.stageId] || {}).type === "knockout";
+    const ko = CompStandings.isKO(ctx().D.stageById[ctx().m.stageId]);
     if (ev.winner === "draw" && (f.setType !== "totalPoints" || ko)) { ev.errors.push(t(ko ? "score.noDrawKo" : "score.noDraw")); ev.winner = null; }
     return ev;
   }

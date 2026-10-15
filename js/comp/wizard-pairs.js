@@ -206,7 +206,13 @@
 
   /* ===== Step 9: Format ===== */
   const FORMATS = ["roundRobin", "doubleRoundRobin", "groups", "knockout", "plate", "swiss", "pointsLeague"];
-  const LATER = { plate: 5, swiss: 5, pointsLeague: 5 };
+  // Points league is for fixed pairs only (§9.8).
+  function unavailable(comp, ty) { return comp.kind === "teams" && ty === "pointsLeague"; }
+  // Entrants in the division being planned (or all of them).
+  function entrantCount(comp, divId) {
+    if (comp.kind === "teams") return comp.teams.filter(x => !x.withdrawn).length;
+    return comp.entries.filter(e => !e.withdrawn && e.divisionId && (divId === "all" || !divId || e.divisionId === divId)).length;
+  }
   function planKey(comp) { return comp.settings.formatPlan === "perDivision" && ui.formatDiv ? ui.formatDiv : "all"; }
   function currentPlan(comp) {
     const sp = comp.settings.stagePlan, k = planKey(comp);
@@ -242,12 +248,15 @@
   function matchRange(comp, draw) {
     const per = {};
     draw.meetings.forEach(m => [m.sideA.id, m.sideB.id].forEach(id => { if (id) per[id] = (per[id] || 0) + 1; }));
+    const dyn = draw.stages.find(s => s.type === "swiss" || s.type === "pointsLeague");
+    if (dyn) return { min: dyn.config.rounds, max: dyn.config.rounds }; // everyone plays (or sits out) every round
     const koRounds = draw.stages.filter(s => s.type === "knockout").map(s => Math.log2(s.config.size || 2));
     const direct = draw.stages.some(s => s.type === "knockout" && s.order === 0);
     const counts = entrantIds(comp).map(id => per[id] || 0);
     if (!counts.length) return { min: 0, max: 0 };
     const extra = Math.max.apply(null, koRounds.concat([0]));
-    return { min: direct ? Math.min.apply(null, counts.map(c => Math.max(c, 1))) : Math.min.apply(null, counts),
+    const plate = draw.stages.some(s => s.type === "plate") ? 1 : 0; // first-round losers get at least one more match
+    return { min: (direct ? Math.min.apply(null, counts.map(c => Math.max(c, 1))) : Math.min.apply(null, counts)) + plate,
       max: direct ? extra : Math.max.apply(null, counts) + extra };
   }
   // Who the draw is between: pairs, or teams in a team competition.
@@ -257,7 +266,7 @@
   function recommendedFormat(comp, divId) {
     if (entrantIds(comp).length < 2 || (comp.kind === "teams" && !(comp.settings.meetingTemplate || []).length)) return null;
     const budget = comp.settings.timeAvailable || 240;
-    const order = ["roundRobin", "groups", "knockout"];
+    const order = ["roundRobin", "groups", "swiss", "knockout"]; // fairest first (§6.2 step 9)
     for (const type of order) {
       const r = trial(comp, CompModel.stagePlanFor(type), divId);
       if (r.est.minutes <= budget) return type;
@@ -269,13 +278,13 @@
     recommend: function (comp) {
       const rec = recommendedFormat(comp, "all");
       const preset = (CompModel.PRESETS[comp.settings.preset] || {}).stage;
-      const type = preset && !LATER[preset] ? preset : (rec || "groups");
+      const type = preset && !unavailable(comp, preset) ? preset : (rec || "groups");
       comp.settings.formatPlan = "sameForAll";
       comp.settings.stagePlan = { all: CompModel.stagePlanFor(type) };
     },
     validate: function (comp) {
       const plans = comp.settings.formatPlan === "perDivision" ? comp.divisions.map(d => comp.settings.stagePlan[d.id] || comp.settings.stagePlan.all) : [comp.settings.stagePlan.all];
-      return plans.some(p => !p || LATER[p.type]) ? ["wiz.err.format"] : [];
+      return plans.some(p => !p || unavailable(comp, p.type)) ? ["wiz.err.format"] : [];
     },
     body: function (comp) {
       let h = "";
@@ -289,7 +298,7 @@
       const divId = planKey(comp), plan = currentPlan(comp);
       const rec = recommendedFormat(comp, divId);
       const est = {};
-      if (rec) ["roundRobin", "doubleRoundRobin", "groups", "knockout"].forEach(ty => {
+      if (rec) FORMATS.filter(ty => !unavailable(comp, ty)).forEach(ty => {
         const p = ty === plan.type ? plan : CompModel.stagePlanFor(ty);
         est[ty] = trial(comp, p, divId);
       });
@@ -300,8 +309,28 @@
           '<div class="wiz-row"><span class="wiz-label">' + esc(t("format.advance")) + "</span>" + U.stepper("advance", plan.advance || 2, 1, 4) + "</div>" +
           '<div class="wiz-label">' + esc(t("format.seeding")) + "</div>" + seg("seeding", [{ value: "snake", label: t("format.seeding.snake") }, { value: "random", label: t("format.seeding.random") }], plan.seeding || "snake");
       }
-      if (plan.type === "groups" || plan.type === "knockout") {
+      if (plan.type === "groups" || plan.type === "knockout" || plan.type === "plate") {
         h += '<div class="wiz-label">' + esc(t("format.third")) + "</div>" + seg("thirdPlace", [{ value: "yes", label: t("yes") }, { value: "no", label: t("no") }], plan.thirdPlace === false ? "no" : "yes");
+      }
+      if (plan.type === "groups") {
+        h += '<div class="wiz-label">' + esc(t("format.groupPlate")) + '</div><div class="muted">' + esc(t("format.groupPlate.hint")) + "</div>" +
+          seg("groupPlate", [{ value: "no", label: t("no") + " \u2605" }, { value: "yes", label: t("yes") }], plan.plate ? "yes" : "no");
+      }
+      // A plate needs at least two first-round losers (or two non-qualifiers); say so instead of quietly leaving it out.
+      if ((plan.type === "plate" || (plan.type === "groups" && plan.plate)) && est[plan.type] && !est[plan.type].draw.stages.some(st => st.type === "plate")) {
+        h += '<div class="wiz-warn">' + esc(t("format.plateNone")) + "</div>";
+      }
+      const n = entrantCount(comp, divId);
+      if (plan.type === "swiss" || plan.type === "pointsLeague") {
+        const def = CompGenerate.defaultRounds(plan.type, n), rounds = plan.rounds || def;
+        const max = plan.type === "swiss" ? Math.max(1, Math.min(9, n - 1)) : 30;
+        h += '<div class="wiz-row"><span class="wiz-label">' + esc(t("format.rounds")) + "</span>" + U.stepper("rounds", rounds, 1, max) + "</div>" +
+          '<div class="muted">' + esc(t(plan.type === "swiss" ? "format.rounds.swiss" : "format.rounds.league", { n: def })) + "</div>";
+        if (plan.type === "swiss") h += '<div class="wiz-label">' + esc(t("format.firstRound")) + "</div>" +
+          seg("firstRound", [{ value: "seed", label: t("format.firstRound.seed") + " \u2605" }, { value: "random", label: t("format.seeding.random") }], plan.firstRound || "seed");
+        else h += '<div class="wiz-label">' + esc(t("format.pairing")) + "</div>" + U.optionList("pairing", [
+          { value: "mexicano", label: t("format.mexicano"), desc: t("format.mexicano.desc"), recommended: true },
+          { value: "americano", label: t("format.americano"), desc: t("format.americano.desc") }], plan.pairing || "mexicano");
       }
       h += '<details class="wiz-adv"><summary>' + esc(t("wiz.advanced")) + '</summary><div class="wiz-row"><span class="wiz-label">' + esc(t("format.time")) + "</span>" +
         U.stepper("timeAvailable", Math.round((comp.settings.timeAvailable || 240) / 30) / 2, 1, 12) + '</div><div class="muted">' + esc(t("format.time.hint")) + "</div></details>";
@@ -310,7 +339,26 @@
     act: function (comp, act, el, group, value) {
       const k = planKey(comp), plan = JSON.parse(JSON.stringify(currentPlan(comp)));
       const put = (p) => { comp.settings.stagePlan[k] = p; };
-      if (act === "pick" && group === "fmtType") { if (!LATER[value] && value !== plan.type) U.change("format", () => put(CompModel.stagePlanFor(value))); }
+      if (act === "pick" && group === "fmtType") {
+        if (unavailable(comp, value) || value === plan.type) return;
+        U.change("format", () => {
+          put(CompModel.stagePlanFor(value));
+          // points league plays "first to 21 total points" by default (§9.8); back to the sport's format otherwise
+          if (!comp.wizard.visited.scoring) {
+            const fs = comp.settings.matchFormats = comp.settings.matchFormats || {};
+            if (value === "pointsLeague") fs.main = CompFormat.finalize(JSON.parse(JSON.stringify(CompFormat.TOTAL_POINTS)));
+            else if (fs.main && fs.main.setType === "totalPoints") delete fs.main;
+          }
+        });
+      }
+      else if (act === "pick" && group === "groupPlate") { plan.plate = value === "yes"; put(plan); U.rerender(); }
+      else if (act === "pick" && group === "firstRound") { plan.firstRound = value; put(plan); U.rerender(); }
+      else if (act === "pick" && group === "pairing") { plan.pairing = value; put(plan); U.rerender(); }
+      else if (act === "rounds") {
+        const def = CompGenerate.defaultRounds(plan.type, entrantCount(comp, k));
+        plan.rounds = Math.max(1, Math.min(plan.type === "swiss" ? Math.max(1, Math.min(9, entrantCount(comp, k) - 1)) : 30, (plan.rounds || def) + Number(el.dataset.delta)));
+        put(plan); U.rerender();
+      }
       else if (act === "pick" && group === "formatPlan") {
         U.change("format", () => {
           comp.settings.formatPlan = value;
@@ -328,9 +376,9 @@
   function optionList(comp, selected, rec, est) {
     return U.optionList("fmtType", FORMATS.map(function (ty) {
       let desc = t("format." + ty + ".desc");
-      if (LATER[ty]) desc = t("format.later", { phase: LATER[ty] });
+      if (unavailable(comp, ty)) desc = t("format.pairsOnly");
       else if (est[ty]) desc += " · " + t(comp.kind === "teams" ? "format.estimate.teams" : "format.estimate", { time: CompSchedule.fmtDuration(est[ty].est.minutes), min: est[ty].min, max: est[ty].max });
-      return { value: ty, label: t("format." + ty), desc: desc, recommended: ty === rec, disabled: !!LATER[ty] };
+      return { value: ty, label: t("format." + ty), desc: desc, recommended: ty === rec, disabled: unavailable(comp, ty) };
     }), selected);
   }
 
@@ -342,14 +390,20 @@
   }
   function hasKnockout(comp) {
     const sp = comp.settings.stagePlan || {};
-    return Object.keys(sp).some(k => sp[k] && (sp[k].type === "groups" || sp[k].type === "knockout"));
+    return Object.keys(sp).some(k => sp[k] && ["groups", "knockout", "plate"].indexOf(sp[k].type) !== -1);
   }
   function capDefault(target) { return target === 21 ? 30 : target === 15 ? 21 : null; }
 
+  function isLeague(comp) { return Object.keys(comp.settings.stagePlan || {}).some(k => (comp.settings.stagePlan[k] || {}).type === "pointsLeague"); }
   function formatEditor(comp, slot) {
     const f = ensureFormat(comp, slot);
     let h = "";
-    if (comp.sport === "badminton") {
+    if (f.setType === "totalPoints") {
+      // points league: one game, both sides' points add up to the target (draws possible when even)
+      h += '<div class="wiz-row"><span class="wiz-label">' + esc(t("score.totalTarget")) + "</span>" + U.stepper("totalTarget:" + slot, f.target, 5, 99) + "</div>" +
+        '<div class="muted">' + esc(t("score.totalHint")) + "</div>" +
+        '<button type="button" class="wiz-link" data-act="pick" data-group="sportFormat:' + slot + '" data-value="1">' + esc(t("score.useSport")) + "</button>";
+    } else if (comp.sport === "badminton") {
       const pts = [15, 21, 25, 30];
       h += '<div class="wiz-label">' + esc(t("score.winPoint")) + "</div>" +
         seg("winPoint:" + slot, pts.map(n => ({ value: String(n), label: String(n) })).concat([{ value: "custom", label: t("score.custom") }]), pts.indexOf(f.target) !== -1 && !ui["customWin" + slot] ? String(f.target) : "custom");
@@ -357,6 +411,7 @@
       h += '<div class="wiz-label">' + esc(t("score.deuce")) + "</div>" + seg("deuce:" + slot, [{ value: "yes", label: t("yes") + " ★" }, { value: "no", label: t("no") }], f.winBy === 2 ? "yes" : "no");
       h += '<div class="wiz-label">' + esc(t("score.cap")) + "</div>" + seg("cap:" + slot, [{ value: "none", label: t("score.noCap") }, { value: "set", label: t("score.capAt") }], f.cap ? "set" : "none");
       if (f.cap) h += '<input type="number" min="1" max="99" class="wiz-input wiz-num" data-field="fmt:' + slot + ':cap" value="' + f.cap + '" aria-label="' + esc(t("score.cap")) + '">';
+      if (isLeague(comp)) h += '<button type="button" class="wiz-link" data-act="pick" data-group="totalFormat:' + slot + '" data-value="1">' + esc(t("score.useTotal")) + "</button>";
       h += '<div class="wiz-label">' + esc(t("score.games")) + "</div>" + seg("bestOf:" + slot, [{ value: "1", label: t("score.bo1") + " ★" }, { value: "3", label: t("score.bo3") }, { value: "5", label: t("score.bo5") }], String(f.sets));
     } else {
       const presets = CompFormat.presetsFor(comp.sport || "other");
@@ -404,7 +459,14 @@
       return h;
     },
     act: function (comp, act, el, group, value) {
+      if (act.indexOf("totalTarget:") === 0) {
+        const f0 = ensureFormat(comp, act.split(":")[1]);
+        f0.target = Math.max(5, Math.min(99, f0.target + Number(el.dataset.delta))); f0.id = "totalPoints"; CompFormat.finalize(f0);
+        return U.rerender();
+      }
       if (act !== "pick" || !group) return;
+      if (group.indexOf("sportFormat:") === 0) { comp.settings.matchFormats[group.split(":")[1]] = CompFormat.finalize(JSON.parse(JSON.stringify(CompFormat.recommendedFor(comp.sport || "other")))); return U.rerender(); }
+      if (group.indexOf("totalFormat:") === 0) { comp.settings.matchFormats[group.split(":")[1]] = CompFormat.finalize(JSON.parse(JSON.stringify(CompFormat.TOTAL_POINTS))); return U.rerender(); }
       const parts = group.split(":"), key = parts[0], slot = parts[1] || "main";
       if (key === "koFormat") { comp.settings.koFormat = value; if (value === "different") ensureFormat(comp, "ko"); else delete comp.settings.matchFormats.ko; return U.rerender(); }
       if (key === "walkover") { comp.settings.walkoverScore = value; return U.rerender(); }
@@ -444,22 +506,28 @@
   const TB_ALL = ["headToHead", "setDiff", "gameDiff", "gamesWon", "manual"];
   Wizard.register("standings", {
     validate: function (comp) {
-      const f = (comp.settings.matchFormats || {}).main;
+      const f = (comp.settings.matchFormats || {}).main, sp = comp.settings.stagePlan || {};
+      const plans = comp.settings.formatPlan === "perDivision" ? comp.divisions.map(d => sp[d.id] || sp.all) : [sp.all];
+      if (plans.every(x => x && x.type === "pointsLeague")) return []; // ranked by points scored whatever is picked
       return comp.settings.standings.pairs.rankBy === "score" && (!f || f.sets !== 3) ? ["wiz.err.scoreRank"] : [];
     },
     body: function (comp) {
       const p = comp.settings.standings.pairs, f = ensureFormat(comp, "main");
       const unit = f.setType === "games" ? "games" : "points";
-      let h = U.optionList("rankBy", [
+      // A points league always ranks by points scored (§9.8); the choice below is for the other formats.
+      const plans = comp.settings.formatPlan === "perDivision" ? comp.divisions.map(d => comp.settings.stagePlan[d.id] || comp.settings.stagePlan.all) : [comp.settings.stagePlan.all];
+      const league = plans.filter(x => x && x.type === "pointsLeague").length, allLeague = league && league === plans.length;
+      let h = league ? '<div class="muted">' + esc(t("stand.leagueNote")) + "</div>" : "";
+      if (!allLeague) h += U.optionList("rankBy", [
         { value: "wins", label: t("stand.wins"), desc: t("stand.wins.desc"), recommended: true },
         { value: "league", label: t("stand.league"), desc: t("stand.league.desc", { w: p.league.win, l: p.league.loss }) },
         { value: "score", label: t("stand.score"), desc: f.sets === 3 ? t("stand.score.desc") : t("stand.score.only3"), disabled: f.sets !== 3 }
       ], p.rankBy);
-      if (p.rankBy === "league") {
+      if (!allLeague && p.rankBy === "league") {
         h += '<div class="wiz-row"><span class="wiz-label">' + esc(t("stand.ptsWin")) + "</span>" + U.stepper("lgWin", p.league.win, 0, 10) + "</div>" +
           '<div class="wiz-row"><span class="wiz-label">' + esc(t("stand.ptsLoss")) + "</span>" + U.stepper("lgLoss", p.league.loss, 0, 10) + "</div>";
       }
-      if (p.rankBy === "score") {
+      if (!allLeague && p.rankBy === "score") {
         h += ["2-0", "2-1", "1-2", "0-2"].map(k => '<div class="wiz-row"><span class="wiz-label">' + esc(t("stand.scoreRow", { s: k.replace("-", "–") })) + "</span>" + U.stepper("sbs:" + k, p.pointsByScore[k], 0, 10) + "</div>").join("");
       }
       h += '<div class="wiz-label">' + esc(t("stand.tiebreakers")) + '</div><div class="muted">' + esc(t("stand.tiebreakers.hint")) + '</div><div class="wiz-list">' +
@@ -576,13 +644,14 @@
         const fs = comp.settings.matchFormats || {};
         h += reviewCard("scoring", name("scoring"), [fs.main ? CompFormat.describe(fs.main) : "—"].concat(fs.ko ? [t("review.koFormat", { f: CompFormat.describe(fs.ko) })] : []));
         const p = comp.settings.standings.pairs;
-        h += reviewCard("standings", name("standings"), [t("stand." + p.rankBy), p.tiebreakers.map(tb => t("tb." + tb, { unit: t("unit.points") })).join(" › ")]);
+        const allLeague = (comp.settings.formatPlan === "perDivision" ? comp.divisions.map(d => sp[d.id] || sp.all) : [sp.all]).every(x => x && x.type === "pointsLeague");
+        h += reviewCard("standings", name("standings"), [allLeague ? t("stand.leagueShort") : t("stand." + p.rankBy), p.tiebreakers.map(tb => t("tb." + tb, { unit: t("unit.points") })).join(" › ")]);
         h += reviewCard("courts", name("courts"), [t("review.courts", { n: comp.settings.courtsCount, mode: t("courts." + (comp.settings.courtMode === "homeBorrow" ? "home" : comp.settings.courtMode)) })]);
         if (!bad.length) {
           const r = reviewNumbers(comp);
           const fin = CompSchedule.finishTime(comp.settings.startTime, r.est.minutes);
           h += '<div class="wiz-card"><div class="wiz-card-head"><span>' + esc(t("review.numbers")) + "</span></div>" +
-            ['<div class="wiz-card-line">' + esc(t("review.matches", { n: r.draw.matches.length, m: r.draw.meetings.length })) + "</div>",
+            ['<div class="wiz-card-line">' + esc(t("review.matches", { n: r.est.matches, m: r.est.meetings })) + "</div>",
              '<div class="wiz-card-line">' + esc(t("review.perEntry", { min: r.min, max: r.max })) + "</div>",
              '<div class="wiz-card-line">' + esc(t("review.duration", { time: CompSchedule.fmtDuration(r.est.minutes), courts: comp.settings.courtsCount, per: CompSchedule.minutesDefault(comp) })) + (fin ? " · " + esc(t("review.finish", { at: fin })) : "") + "</div>"].join("") + "</div>";
           const budget = comp.settings.timeAvailable || 240;

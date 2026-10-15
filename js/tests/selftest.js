@@ -700,6 +700,112 @@ function runSelfTests(){
     ok("a new pair the template doesn't cover is flagged", UT.entries.some(e => e.teamId === t0.id && e.slot === 3) &&
       !UT.settings.meetingTemplate.some(r => r.slot === 3));
 
+    out.push("swiss, points league, plate");
+    // Build a one-division pairs competition with the given stage plan, then play it to the end
+    // through the same calls the Courts tab uses. pick(i) decides who wins the i-th match.
+    const dynComp = (n, plan, total) => {
+      const c = CompModel.newCompetition({ name: "Dyn" });
+      CompModel.applyPreset(c, "pairsRoundRobin"); c.sport = "padel"; CompModel.setDivisionCount(c, 1);
+      for (let i = 0; i < n; i++) Wizard.pairsUtil.addPair(c, c.divisions[0].id, ["D" + i + "a", "D" + i + "b"], ["M", "M"]).seed = i + 1;
+      c.settings.matchFormats = { main: total ? CompFormat.finalize(JSON.parse(JSON.stringify(CompFormat.TOTAL_POINTS))) : CompFormat.fromPreset("padRace4") };
+      c.settings.stagePlan = { all: plan }; c.settings.courtsCount = 2; Wizard.pairsUtil.syncCourtNames(c);
+      CompGenerate.applyDraw(c, CompGenerate.generateDraw(c)); CompGenerate.advance(c); c.status = "live";
+      return c;
+    };
+    const playOut = (c, pick) => {
+      for (let i = 0; i < 2000; i++) {
+        const D = CompStandings.derive(c), x = CompSchedule.readyList(D)[0];
+        if (!x) return D;
+        const w = pick(i, x), sc = c.settings.matchFormats.main.kind === "totalPoints" ? (w === "A" ? { a: 13, b: 8 } : { a: 8, b: 13 }) : (w === "A" ? { a: 4, b: 1 } : { a: 1, b: 4 });
+        CompResults.apply(c, x.id, { sets: [sc], winner: w });
+        CompGenerate.advance(c);
+      }
+      return CompStandings.derive(c);
+    };
+    const dynCheck = (c, D) => {
+      const st = c.stages[0], seen = {}, bye = {}, r = { rematches: 0, doubleBye: 0, maxByes: 0, rounds: 0, wrong: 0 };
+      const per = {};
+      c.meetings.filter(m => m.stageId === st.id).forEach(m => {
+        const a = D.side(m, "A"), b = D.side(m, "B");
+        r.rounds = Math.max(r.rounds, m.round);
+        (per[m.round] = per[m.round] || []).push(a, b);
+        if (a === "BYE" || b === "BYE") { const id = a === "BYE" ? b : a; if (bye[id]) r.doubleBye++; bye[id] = 1; return; }
+        const k = [a, b].sort().join("|"); if (seen[k]) r.rematches++; seen[k] = 1;
+      });
+      Object.keys(per).forEach(k => {
+        const ids = per[k].filter(x => x !== "BYE"), byes = per[k].length - ids.length;
+        r.maxByes = Math.max(r.maxByes, byes);
+        if (new Set(ids).size !== ids.length || ids.length !== st.groups[0].entryIds.length) r.wrong++;
+      });
+      return r;
+    };
+    [8, 9].forEach(n => [0, 1].forEach(v => {
+      const c = dynComp(n, { type: "swiss", rounds: 5 });
+      const D = playOut(c, (i) => ((i * 7 + v * 3 + n) % 5) < 3 ? "A" : "B"), r = dynCheck(c, D);
+      eq("swiss " + n + " entries, 5 rounds (run " + (v + 1) + "): no rematches, every round complete", [r.rounds, r.rematches, r.wrong], [5, 0, 0]);
+      if (n === 9) eq("swiss 9 entries: one bye per round, never twice to the same entry", [r.maxByes, r.doubleBye], [1, 0]);
+      ok("swiss " + n + ": everything finished", c.meetings.every(m => D.outcome(m).done));
+    }));
+    const SB = dynComp(9, { type: "swiss", rounds: 1 }), SBD = playOut(SB, () => "A");
+    const byeM = SB.meetings.find(m => SBD.side(m, "A") === "BYE" || SBD.side(m, "B") === "BYE");
+    const byeId = SBD.side(byeM, "A") === "BYE" ? SBD.side(byeM, "B") : SBD.side(byeM, "A");
+    const byeRow = SBD.table(SB.stages[0].id, SB.stages[0].groups[0].id).find(x => x.id === byeId);
+    eq("swiss round 1: the lowest seed gets the bye", byeId, SB.entries.find(e => e.seed === 9).id);
+    eq("a bye counts as a walkover win", [byeRow.won, byeRow.played > 0 || byeRow.won === 1], [1, true]);
+    const SR = dynComp(8, { type: "swiss", rounds: 3 });
+    const r1 = SR.meetings.filter(m => m.round === 1).map(m => SR.entries.find(e => e.id === CompStandings.derive(SR).side(m, "A")).seed + "v" + SR.entries.find(e => e.id === CompStandings.derive(SR).side(m, "B")).seed);
+    eq("swiss round 1 by seed: top half v bottom half", r1, ["1v5", "2v6", "3v7", "4v8"]);
+    ok("swiss: only round 1 is drawn at the start", SR.meetings.every(m => m.round === 1));
+    const MX = dynComp(8, { type: "pointsLeague", rounds: 5, pairing: "mexicano" }, true);
+    let last = {}, immediate = 0;
+    const MXD = playOut(MX, (i) => (i % 3 ? "A" : "B"));
+    for (let rd = 1; rd <= 5; rd++) {
+      const now = {};
+      MX.meetings.filter(m => m.round === rd).forEach(m => { const a = MXD.side(m, "A"), b = MXD.side(m, "B"); if (last[a] === b) immediate++; now[a] = b; now[b] = a; });
+      last = now;
+    }
+    eq("mexicano: 5 rounds drawn, nobody meets last round's opponent", [Math.max(...MX.meetings.map(m => m.round)), immediate], [5, 0]);
+    const mxRows = MXD.table(MX.stages[0].id, MX.stages[0].groups[0].id);
+    ok("points league: ranked by points scored", mxRows.every((x, i) => i === 0 || mxRows[i - 1].points >= x.points) && mxRows[0].points === mxRows[0].gamesFor);
+    const LB = dynComp(7, { type: "pointsLeague", rounds: 1, pairing: "mexicano" }, true), LBD = playOut(LB, () => "A");
+    const lbM = LB.meetings.find(m => LBD.side(m, "A") === "BYE" || LBD.side(m, "B") === "BYE");
+    const lbRow = LBD.table(LB.stages[0].id, LB.stages[0].groups[0].id).find(x => x.id === (LBD.side(lbM, "A") === "BYE" ? LBD.side(lbM, "B") : LBD.side(lbM, "A")));
+    eq("points league: sitting out earns half the target points, no win, no match played", [lbRow.points, lbRow.won, lbRow.played], [11, 0, 0]);
+    const AM = dynComp(6, { type: "pointsLeague", rounds: 5, pairing: "americano" }, true), AMD = playOut(AM, () => "A"), ar = dynCheck(AM, AMD);
+    eq("americano 6 entries, 5 rounds: everyone meets everyone once", [ar.rounds, ar.rematches, ar.wrong], [5, 0, 0]);
+    const RD = dynComp(8, { type: "swiss", rounds: 3 });
+    const r1m = RD.matches.filter(x => x.round === 1 || RD.meetings.find(m => m.id === x.meetingId).round === 1);
+    r1m.forEach(x => { CompResults.apply(RD, x.id, { sets: [{ a: 4, b: 1 }], winner: "A" }); CompGenerate.advance(RD); });
+    const before = RD.meetings.filter(m => m.round === 2).map(m => m.sides ? JSON.stringify(m.sides) : JSON.stringify([CompStandings.derive(RD).side(m, "A"), CompStandings.derive(RD).side(m, "B")])).join();
+    CompResults.apply(RD, r1m[0].id, { sets: [{ a: 1, b: 4 }], winner: "B" }); CompStandings.clearStale(RD); CompGenerate.advance(RD);
+    const D2 = CompStandings.derive(RD);
+    const after = RD.meetings.filter(m => m.round === 2).map(m => JSON.stringify([D2.side(m, "A"), D2.side(m, "B")])).join();
+    ok("an untouched next round is redrawn after a correction", RD.meetings.filter(m => m.round === 2).length === 4 && before !== after);
+    ok("knockout + plate, 5 entries: one real first-round match, so no plate", !dynComp(5, { type: "plate", thirdPlace: false }).stages.some(s => s.type === "plate"));
+    [6, 11, 16].forEach(n => {
+      const c = dynComp(n, { type: "plate", thirdPlace: n >= 8 }), D = playOut(c, (i) => (i % 2 ? "A" : "B"));
+      const plate = c.stages.find(s => s.type === "plate");
+      ok("knockout + plate, " + n + " entries: both brackets finish", plate && c.meetings.every(m => D.outcome(m).done) && c.meetings.some(m => m.stageId === plate.id));
+    });
+    [9, 11, 12].forEach(n => {
+      const c = dynComp(n, { type: "plate", thirdPlace: true }), D = playOut(c, (i) => (i % 3 ? "A" : "B"));
+      const main = c.stages.find(s => s.type === "knockout"), plate = c.stages.find(s => s.type === "plate");
+      const firstLost = c.entries.filter(e => {
+        const first = c.meetings.filter(m => m.stageId === main.id && D.outcome(m).kind !== "bye" && [D.side(m, "A"), D.side(m, "B")].indexOf(e.id) !== -1).sort((a, b) => a.round - b.round)[0];
+        const o = first && D.outcome(first);
+        return o && D.side(first, o.winner === "A" ? "B" : "A") === e.id;
+      }).map(e => e.id).sort();
+      const inPlate = [];
+      c.meetings.filter(m => m.stageId === plate.id).forEach(m => ["A", "B"].forEach(w => { const id = D.side(m, w); if (id && id !== "BYE" && inPlate.indexOf(id) === -1) inPlate.push(id); }));
+      eq("knockout + plate, " + n + " entries: the plate is everyone who lost their first match (byes included)", [inPlate.sort().join(), c.meetings.every(m => D.outcome(m).done)], [firstLost.join(), true]);
+    });
+    const GP = dynComp(10, { type: "groups", groupSize: 4, advance: 2, thirdPlace: true, plate: true });
+    const GPD = playOut(GP, (i) => (i % 3 ? "A" : "B"));
+    const gpPlate = GP.stages.find(s => s.type === "plate");
+    const gpQual = GP.stages[0].groups.reduce((a, g) => a.concat(GPD.table(GP.stages[0].id, g.id).slice(0, 2).map(r => r.id)), []);
+    const gpIn = GP.meetings.filter(m => m.stageId === gpPlate.id && m.round === 1).reduce((a, m) => a.concat([GPD.side(m, "A"), GPD.side(m, "B")]), []).filter(x => x !== "BYE");
+    ok("groups + plate: the plate holds the non-qualifiers only, and everything finishes", gpIn.length === 10 - gpQual.length && gpIn.every(x => gpQual.indexOf(x) === -1) && GP.meetings.every(m => GPD.outcome(m).done));
+
     out.push("use recommended, then generate");
     const ur = CompModel.newCompetition({ name: "Rec" });
     CompModel.applyPreset(ur, CompModel.RECOMMENDED_PRESET);

@@ -35,9 +35,10 @@ const CompFormat = (function () {
       mk({ id: "oth3x21", sport: "other", sets: 3, setType: "points", target: 21, winBy: 2, cap: null, minutes: 35 })
     ]
   };
-  const TOTAL_POINTS = mk({ id: "totalPoints", setType: "totalPoints", sets: 1, target: 21, winBy: 1, minutes: 12 });
+  const TOTAL_POINTS = mk({ id: "totalPoints", sport: "any", setType: "totalPoints", sets: 1, target: 21, winBy: 1, minutes: 12 });
 
-  function presetsFor(sport) { return PRESETS[sport] || PRESETS.other; }
+  // Every sport also offers the points-league format ("first to 21 total points", §7.3).
+  function presetsFor(sport) { return (PRESETS[sport] || PRESETS.other).concat([TOTAL_POINTS]); }
   function recommendedFor(sport) { return presetsFor(sport)[0]; }
   function copy(f) { return JSON.parse(JSON.stringify(f)); }
   function findPreset(id) {

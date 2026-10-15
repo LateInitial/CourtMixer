@@ -139,6 +139,8 @@ const CompModel = (function () {
     if (type === "groups") return { type: "groups", groupSize: 4, advance: 2, thirdPlace: true, seeding: "snake" };
     if (type === "knockout") return { type: "knockout", thirdPlace: true };
     if (type === "pointsLeague") return { type: "pointsLeague", rounds: null, pairing: "mexicano" };
+    if (type === "swiss") return { type: "swiss", rounds: null, firstRound: "seed" };
+    if (type === "plate") return { type: "plate", thirdPlace: true };
     return { type: type };
   }
 

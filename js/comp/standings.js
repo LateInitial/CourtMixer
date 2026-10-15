@@ -43,6 +43,15 @@ const CompStandings = (function () {
               v = side(m2, w);
             }
           }
+        } else if (src.kind === "firstMatchLoser") {
+          // the loser of a round-2 meeting, but only when it was their first match (the side that had a bye)
+          const m2 = meetingById[src.meetingId];
+          if (m2 && !resolving[m2.id]) {
+            resolving[m2.id] = true;
+            const o = outcome(m2);
+            delete resolving[m2.id];
+            if (o.winner === "A" || o.winner === "B") v = o.winner === src.which ? "BYE" : side(m2, src.which);
+          }
         } else if (src.kind === "groupRank") {
           v = groupRankEntry(src.groupId, src.rank);
         }
@@ -62,7 +71,8 @@ const CompStandings = (function () {
       else if (meeting.resultOverride) r = { winner: meeting.resultOverride.winner, done: true, kind: "override", match };
       else {
         const a = side(meeting, "A"), b = side(meeting, "B");
-        if (a === "BYE" && b && b !== "BYE") r = { winner: "B", done: true, kind: "bye", match };
+        if (a === "BYE" && b === "BYE") r = { winner: "A", done: true, kind: "bye", match }; // nothing to play: the bye moves on
+        else if (a === "BYE" && b && b !== "BYE") r = { winner: "B", done: true, kind: "bye", match };
         else if (b === "BYE" && a && a !== "BYE") r = { winner: "A", done: true, kind: "bye", match };
         else if (!isTeams && match && match.status === "done" && match.winner) r = { winner: match.winner, done: true, kind: match.outcome === "walkover" ? "walkover" : "result", match };
         else if (isTeams && a && b && a !== "BYE" && b !== "BYE" && !(withdrawn(a) && withdrawn(b)) &&
@@ -103,7 +113,7 @@ const CompStandings = (function () {
     // { matchesA, matchesB, setsA, setsB, gamesA, gamesB, winner, decided, done, deadIds, needDecider, needsDecision }
     function teamResult(meeting) {
       if (teamCache[meeting.id]) return teamCache[meeting.id];
-      const st = stageById[meeting.stageId], f = formatFor(st), ko = st && st.type === "knockout";
+      const st = stageById[meeting.stageId], f = formatFor(st), ko = isKO(st);
       const ts = comp.settings.standings.teams, tally = ts.resultMode === "tally";
       const ms = matchesOfMeeting[meeting.id] || [];
       const regular = ms.filter(x => !rubberOf(x).isDecider), dec = ms.find(x => rubberOf(x).isDecider) || null;
@@ -198,7 +208,29 @@ const CompStandings = (function () {
       else { const mp = ts.meetingPoints || { win: 2, draw: 1, loss: 0 }; row.teamPoints += o.winner === "draw" ? mp.draw : o.winner === asSide ? mp.win : mp.loss; }
     }
 
+    // Swiss / points league: sitting out a round (odd numbers) counts as a walkover win (§9.7).
+    function byeWin(row, meeting, asSide) {
+      const st = stageById[meeting.stageId], f = formatFor(st);
+      row.byes = (row.byes || 0) + 1;
+      // Points league (D-055): a round off is a rest, not a win; it earns half a walkover's points,
+      // so sitting out costs about what an average match would have earned.
+      if (st && st.type === "pointsLeague") { row.gamesFor += Math.ceil(CompFormat.tally(f, CompFormat.walkoverSets(f)).gamesA / 2); return; }
+      row.played++; row.won++;
+      if (isTeams) {
+        const n = (comp.settings.meetingTemplate || []).filter(r => !r.isDecider).length;
+        if (comp.settings.standings.teams.resultMode === "tally") row.teamPoints += n;
+        else row.teamPoints += (comp.settings.standings.teams.meetingPoints || { win: 2 }).win;
+        row.matchesFor += n;
+      }
+      if (comp.settings.walkoverScore === "winOnly") return;
+      const tl = CompFormat.tally(f, CompFormat.walkoverSets(f)), k = isTeams ? (comp.settings.meetingTemplate || []).filter(r => !r.isDecider).length : 1;
+      row.setsFor += k * tl.setsA; row.gamesFor += k * tl.gamesA;
+      if (!isTeams) { const n = CompFormat.needed(f); row.scorePoints += Number((comp.settings.standings.pairs.pointsByScore || {})[n + "-0"]) || 0; }
+    }
+
     function addResult(row, meeting, asSide) {
+      const o0 = outcome(meeting), st0 = stageById[meeting.stageId];
+      if (o0.kind === "bye" && o0.winner === asSide && st0 && (st0.type === "swiss" || st0.type === "pointsLeague")) return byeWin(row, meeting, asSide);
       if (isTeams) return addTeamResult(row, meeting, asSide);
       const o = outcome(meeting), sc = score(meeting);
       if (!o.done || o.kind === "void" || o.kind === "bye" || !o.winner) return;
@@ -234,20 +266,24 @@ const CompStandings = (function () {
       ids.forEach(id => { rows[id] = emptyRow(id); });
       groupMeetings(stage.id, group.id).forEach(function (m) {
         const a = side(m, "A"), b = side(m, "B");
+        if (onlyAmong) { if (!rows[a] || !rows[b] || onlyAmong.indexOf(a) === -1 || onlyAmong.indexOf(b) === -1) return; } // head-to-head ignores byes
+        else if (b === "BYE" && rows[a]) { addResult(rows[a], m, "A"); return; }
+        else if (a === "BYE" && rows[b]) { addResult(rows[b], m, "B"); return; }
         if (!rows[a] || !rows[b]) return;
-        if (onlyAmong && (onlyAmong.indexOf(a) === -1 || onlyAmong.indexOf(b) === -1)) return;
         addResult(rows[a], m, "A"); addResult(rows[b], m, "B");
       });
       Object.keys(rows).forEach(id => {
         const r = rows[id];
         r.setDiff = r.setsFor - r.setsAgainst; r.gameDiff = r.gamesFor - r.gamesAgainst; r.matchDiff = r.matchesFor - r.matchesAgainst;
-        r.points = isTeams ? r.teamPoints : primaryPoints(r);
+        // points league: ranked by total points scored, then wins (§9.8)
+        r.points = stage.type === "pointsLeague" ? r.gamesFor : isTeams ? r.teamPoints : primaryPoints(r);
       });
       return rows;
     }
 
     function metric(tb, row) {
       if (tb === "matchDiff") return row.matchDiff;
+      if (tb === "won") return row.won;
       if (tb === "setDiff") return row.setDiff;
       if (tb === "gameDiff") return row.gameDiff;
       if (tb === "gamesWon") return row.gamesFor;
@@ -292,7 +328,8 @@ const CompStandings = (function () {
       if (!group) return [];
       const ids = group.entryIds.filter(id => { const e = entryById[id] || teamById[id]; return !(e && e.withdrawn && e.withdrawMode === "void"); });
       const rows = rowsFor(stage, group, ids, null);
-      const tbs = (isTeams ? comp.settings.standings.teams.tiebreakers : comp.settings.standings.pairs.tiebreakers) || [];
+      let tbs = (isTeams ? comp.settings.standings.teams.tiebreakers : comp.settings.standings.pairs.tiebreakers) || [];
+      if (stage.type === "pointsLeague") tbs = ["won"].concat(tbs);
       const ordered = [].concat.apply([], bucket(ids.map(id => rows[id]), r => r.points).map(p => breakTie(stage, group, p, tbs)));
       const adv = stage.type === "groups" ? (stage.config.advance || 0) : 0;
       ordered.forEach((r, i) => { r.rank = i + 1; r.qualifies = adv > 0 && i < adv; });
@@ -326,7 +363,7 @@ const CompStandings = (function () {
         const g = st && st.groups.find(x => x.id === src.groupId);
         return t("ko.groupRank", { group: g ? g.name : "?", rank: src.rank });
       }
-      if (src.kind === "meetingWinner" || src.kind === "meetingLoser") {
+      if (src.kind === "meetingWinner" || src.kind === "meetingLoser" || src.kind === "firstMatchLoser") {
         const m2 = meetingById[src.meetingId];
         return t(src.kind === "meetingWinner" ? "ko.winnerOf" : "ko.loserOf", { m: m2 ? meetingLabel(m2, true) : "?" });
       }
@@ -337,8 +374,12 @@ const CompStandings = (function () {
     function meetingLabel(meeting, short) {
       const st = stageById[meeting.stageId];
       if (!st) return "";
-      if (st.type === "knockout") {
+      if (isKO(st)) {
         if (meeting.thirdPlace) return t("ko.third");
+        if (st.type === "plate") {
+          const k = CompGenerate.roundLabelKey(st.config.size || 2, meeting.round), cnt = (st.config.size || 2) / Math.pow(2, meeting.round);
+          return t("ko.plate", { round: t(k + (short ? ".short" : ""), { n: (st.config.size || 2) / Math.pow(2, meeting.round - 1) }) }) + (cnt > 1 ? " " + (meeting.slot + 1) : "");
+        }
         const key = CompGenerate.roundLabelKey(st.config.size || 2, meeting.round);
         const name = t(key + (short ? ".short" : ""), { n: (st.config.size || 2) / Math.pow(2, meeting.round - 1) });
         const count = (st.config.size || 2) / Math.pow(2, meeting.round);
@@ -397,5 +438,8 @@ const CompStandings = (function () {
     x.startedAt = null; x.endedAt = null; x.entryIds = null; x.sideA.playerIds = []; x.sideB.playerIds = [];
   }
 
-  return { derive, staleMatches, clearStale, resetMatch };
+  // Knockout-style stages (the main bracket and a plate): no draws, knockout dead-rubber rule.
+  function isKO(st) { return !!st && (st.type === "knockout" || st.type === "plate"); }
+
+  return { derive, staleMatches, clearStale, resetMatch, isKO };
 })();

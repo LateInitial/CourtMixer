@@ -371,7 +371,7 @@
         const range = P.matchRange(comp, draw);
         const fin = CompSchedule.finishTime(comp.settings.startTime, est.minutes);
         h += '<div class="wiz-card"><div class="wiz-card-head"><span>' + esc(t("review.numbers")) + "</span></div>" +
-          '<div class="wiz-card-line">' + esc(t("review.teamMatches", { m: draw.meetings.length, n: draw.matches.length })) + "</div>" +
+          '<div class="wiz-card-line">' + esc(t("review.teamMatches", { m: est.meetings, n: est.matches })) + "</div>" +
           '<div class="wiz-card-line">' + esc(t("review.perTeam", { min: range.min, max: range.max })) + "</div>" +
           '<div class="wiz-card-line">' + esc(t("review.duration", { time: CompSchedule.fmtDuration(est.minutes), courts: comp.settings.courtsCount, per: CompSchedule.minutesDefault(comp) })) + (fin ? " · " + esc(t("review.finish", { at: fin })) : "") + "</div></div>";
         if (est.minutes > (comp.settings.timeAvailable || 240)) h += '<div class="wiz-warn">' + esc(t("review.tooLong", { time: CompSchedule.fmtDuration(est.minutes), courts: comp.settings.courtsCount, budget: CompSchedule.fmtDuration(comp.settings.timeAvailable || 240) })) +

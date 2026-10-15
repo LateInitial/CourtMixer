@@ -168,8 +168,24 @@ const CompGenerate = (function () {
     const entries = comp.entries.filter(e => e.divisionId === division.id && !e.withdrawn);
     const baseKey = division.id + (division.drawSeq ? ":" + division.drawSeq : ""); // Redraw bumps drawSeq
     const r = buildStages(comp, entries, planFor(comp, division), baseKey, division.id);
-    const matches = r.meetings.filter(m => !isByeMeeting(m)).map(m => matchFor(m, division));
-    return { stages: r.stages, meetings: r.meetings, matches };
+    return { stages: r.stages, meetings: r.meetings, matches: makeMatches(comp, r.meetings, division) };
+  }
+
+  // Match records for meetings: one per meeting (pairs) or one per rubber (teams); byes get none.
+  function makeMatches(comp, meetings, division) {
+    const out = [];
+    const real = meetings.filter(m => !isByeMeeting(m));
+    if (comp.kind !== "teams") { real.forEach(m => out.push(matchFor(m, division))); return out; }
+    const rubbers = (comp.settings.meetingTemplate || []).slice().sort((a, b) => a.order - b.order);
+    const byId = {}; comp.divisions.forEach(d => { byId[d.id] = d; });
+    real.forEach(function (m) {
+      rubbers.forEach(function (rb, i) {
+        const x = matchFor(m, byId[rb.divisionId] || { id: rb.divisionId, category: rb.category });
+        x.order = i + 1; x.rubberId = rb.id; x.category = rb.category;
+        out.push(x);
+      });
+    });
+    return out;
   }
 
   // Teams mode: the teams are the entrants of one stage plan across all divisions; every meeting
@@ -179,17 +195,7 @@ const CompGenerate = (function () {
     const plan = (comp.settings.stagePlan || {}).all || { type: "roundRobin" };
     const r = buildStages(comp, teams, plan, "teams", null);
     r.meetings.forEach(m => { m.sideA.refType = "team"; m.sideB.refType = "team"; });
-    const rubbers = (comp.settings.meetingTemplate || []).slice().sort((a, b) => a.order - b.order);
-    const byId = {}; comp.divisions.forEach(d => { byId[d.id] = d; });
-    const matches = [];
-    r.meetings.filter(m => !isByeMeeting(m)).forEach(function (m) {
-      rubbers.forEach(function (rb, i) {
-        const x = matchFor(m, byId[rb.divisionId] || { id: rb.divisionId, category: rb.category });
-        x.order = i + 1; x.rubberId = rb.id; x.category = rb.category;
-        matches.push(x);
-      });
-    });
-    return { stages: r.stages, meetings: r.meetings, matches };
+    return { stages: r.stages, meetings: r.meetings, matches: makeMatches(comp, r.meetings, null) };
   }
 
   // Stages and meetings for a list of entrants ({id, seed}) under one stage plan.
@@ -225,16 +231,166 @@ const CompGenerate = (function () {
         koMeetings(ko, first, plan.thirdPlace !== false && st.groups.length * advance >= 4).forEach(m => meetings.push(m));
         stages.push(ko);
       }
-    } else if (plan.type === "knockout") {
+      // Plate (§9.6): everyone who didn't go through plays a second bracket.
+      if (plan.plate) {
+        const seeds = [], most = Math.max.apply(null, st.groups.map(g => g.entryIds.length));
+        for (let r = advance + 1; r <= most; r++) st.groups.forEach((g, gi) => { if (g.entryIds.length >= r) seeds.push({ group: gi, rank: r }); });
+        if (seeds.length >= 2) {
+          const size = nextPow2(seeds.length);
+          const first = bracketPositions(size).map(s => s <= seeds.length ? fromSource({ kind: "groupRank", groupId: st.groups[seeds[s - 1].group].id, rank: seeds[s - 1].rank }) : fromSource({ kind: "bye" }));
+          const pl = newStage(division.id, "plate", 2, { thirdPlace: false, fromStageId: st.id }, fids.ko);
+          koMeetings(pl, first, false).forEach(m => meetings.push(m));
+          stages.push(pl);
+        }
+      }
+    } else if (plan.type === "knockout" || plan.type === "plate") {
       const st = newStage(division.id, "knockout", 0, { thirdPlace: plan.thirdPlace !== false }, fids.ko);
       const ordered = seedOrder(entries, rngFor(comp, baseKey + ":ko"));
       const size = nextPow2(ordered.length);
       const first = bracketPositions(size).map(s => s <= ordered.length ? side(ordered[s - 1].id) : fromSource({ kind: "bye" }));
-      koMeetings(st, first, plan.thirdPlace !== false && ordered.length >= 4).forEach(m => meetings.push(m));
+      const ko = koMeetings(st, first, plan.thirdPlace !== false && ordered.length >= 4);
+      ko.forEach(m => meetings.push(m));
       stages.push(st);
+      // Knockout + plate (§9.6): whoever loses their first match plays a second bracket. In a
+      // 16+ bracket that includes a seed who had a bye and then lost in round 2 (D-054); in smaller
+      // brackets round 2 is already a semi-final, so only real first-round losers go in.
+      const slots = [], all1 = ko.filter(m => m.round === 1);
+      all1.forEach((m, k) => {
+        if (!isByeMeeting(m)) { slots.push({ kind: "meetingLoser", meetingId: m.id }); return; }
+        if (size < 16) return;
+        const r2 = ko.find(x => x.round === 2 && x.slot === k >> 1), mate = all1[k ^ 1];
+        if (!isByeMeeting(mate)) slots.push({ kind: "firstMatchLoser", meetingId: r2.id, which: k % 2 ? "B" : "A" }); // only if the bye side loses
+        else if (k % 2 === 0) slots.push({ kind: "meetingLoser", meetingId: r2.id }); // two bye sides: either loser, counted once
+      });
+      if (plan.type === "plate" && slots.length >= 2) {
+        // in bracket order, padded with byes to a power of 2
+        const size2 = nextPow2(slots.length);
+        const losers = bracketPositions(size2).map(s => s <= slots.length ? fromSource(slots[s - 1]) : fromSource({ kind: "bye" }));
+        const pl = newStage(division.id, "plate", 1, { thirdPlace: false, fromStageId: st.id }, fids.ko);
+        koMeetings(pl, losers, false).forEach(m => meetings.push(m));
+        stages.push(pl);
+      }
+    } else if (plan.type === "swiss" || plan.type === "pointsLeague") {
+      // Rounds are drawn one at a time (advance()); only round 1 exists at the start.
+      const n = entries.length;
+      const rounds = plan.rounds || defaultRounds(plan.type, n);
+      const st = newStage(division.id, plan.type, 0, { manualOrder: {}, rounds: rounds, pairing: plan.pairing || "mexicano",
+        firstRound: plan.firstRound || "seed", seedKey: baseKey }, plan.type === "pointsLeague" ? fids.main : fids.main);
+      const ordered = seedOrder(entries, rngFor(comp, baseKey + ":" + plan.type)).map(e => e.id);
+      const g = { id: uid(), name: "", entryIds: ordered };
+      st.groups.push(g);
+      stages.push(st);
+      firstRound(comp, st, g, ordered).forEach(m => meetings.push(m));
     }
     stages.forEach((s, i) => { s.order = i; });
     return { stages, meetings };
+  }
+
+  /* ===== Swiss and points league (§9.7, §9.8) ===== */
+  function defaultRounds(type, n) {
+    if (type === "swiss") return Math.max(1, Math.min(n - 1, Math.ceil(Math.log2(Math.max(2, n))) + 1));
+    return Math.max(1, Math.min(n - 1, 6));
+  }
+  function byeMeeting(st, g, round, slot, id) { return newMeeting(st.id, g.id, round, slot, side(id), fromSource({ kind: "bye" })); }
+
+  function firstRound(comp, st, g, ordered) {
+    if (st.type === "pointsLeague" && st.config.pairing === "americano") return americanoRound(st, g, ordered, 1);
+    let ids = ordered.slice();
+    if (st.config.firstRound === "random") ids = shuffle(ids, rngFor(comp, st.config.seedKey + ":r1"));
+    const out = [];
+    if (ids.length % 2) out.push(byeMeeting(st, g, 1, Math.floor(ids.length / 2), ids.pop())); // lowest seed sits out
+    const half = ids.length / 2;
+    for (let k = 0; k < half; k++) {
+      // Swiss by seed: top half v bottom half (1 v 5, 2 v 6 ...); Mexicano / random: neighbours
+      const pair = (st.type === "swiss" && st.config.firstRound !== "random") ? [ids[k], ids[k + half]] : [ids[2 * k], ids[2 * k + 1]];
+      out.push(newMeeting(st.id, g.id, 1, k, side(pair[0]), side(pair[1])));
+    }
+    return out;
+  }
+  // Americano: a round-robin rotation, so opponents differ for as long as possible.
+  function americanoRound(st, g, ordered, round) {
+    const rr = roundRobin(ordered), pairs = rr[(round - 1) % rr.length], out = [];
+    const playing = {};
+    pairs.forEach((p, k) => { playing[p[0]] = playing[p[1]] = true; out.push(newMeeting(st.id, g.id, round, k, side(p[0]), side(p[1]))); });
+    ordered.filter(id => !playing[id]).forEach((id, k) => out.push(byeMeeting(st, g, round, pairs.length + k, id)));
+    return out;
+  }
+  // Next round from the current standings. order: entry ids best first; played: "a|b" keys;
+  // hadBye: ids that already sat out. Swiss pairs top-down avoiding rematches (with backtracking);
+  // Mexicano pairs 1v2, 3v4 avoiding last round's opponent.
+  function pairRound(type, order, played, hadBye, lastOpp) {
+    const ids = order.slice(), byes = [];
+    if (ids.length % 2) {
+      let k = ids.length - 1;
+      while (k > 0 && hadBye[ids[k]]) k--;
+      byes.push(ids.splice(k, 1)[0]);
+    }
+    // Swiss: never a previous opponent. Mexicano: never last round's opponent (others are fine).
+    const met = type === "pointsLeague" ? (a, b) => lastOpp[a] === b : (a, b) => played[a < b ? a + "|" + b : b + "|" + a];
+    // Top-down with backtracking: each entry takes the nearest-ranked opponent still allowed.
+    function solve(rest, allowRematch) {
+      if (!rest.length) return [];
+      const a = rest[0];
+      for (let j = 1; j < rest.length; j++) {
+        if (!allowRematch && met(a, rest[j])) continue;
+        const sub = solve(rest.slice(1, j).concat(rest.slice(j + 1)), allowRematch);
+        if (sub) return [[a, rest[j]]].concat(sub);
+      }
+      return null;
+    }
+    const pairs = solve(ids, false) || solve(ids, true);
+    return { pairs, byes };
+  }
+
+  // Draws the next Swiss / points-league round once the current one is finished. If the latest
+  // round hasn't started yet, it's redrawn from the current standings (e.g. after a result was
+  // corrected). Returns true when something changed.
+  function advance(comp) {
+    let changed = false;
+    comp.stages.filter(st => st.type === "swiss" || st.type === "pointsLeague").forEach(function (st) {
+      for (let guard = 0; guard < 2; guard++) {
+        const D = CompStandings.derive(comp), g = st.groups[0];
+        const ms = comp.meetings.filter(m => m.stageId === st.id);
+        const last = Math.max.apply(null, ms.map(m => m.round).concat([0]));
+        const lastMs = ms.filter(m => m.round === last);
+        const untouched = lastMs.every(m => !comp.matches.some(x => x.meetingId === m.id && x.status !== "pending") && !m.resultOverride);
+        const prevDone = ms.filter(m => m.round === last - 1).every(m => D.outcome(m).done);
+        let round;
+        if (last > 1 && untouched && prevDone && guard === 0) round = last;               // redraw an untouched round
+        else if (last < st.config.rounds && lastMs.every(m => D.outcome(m).done)) round = last + 1;
+        else break;
+        const division = D.divisionById[st.divisionId] || { id: st.divisionId, category: "open" };
+        const active = D.table(st.id, g.id).map(r => r.id).filter(id => { const e = D.entryById[id] || D.teamById[id]; return e && !e.withdrawn; });
+        let fresh;
+        if (st.type === "pointsLeague" && st.config.pairing === "americano") fresh = americanoRound(st, g, g.entryIds.filter(id => active.indexOf(id) !== -1), round);
+        else {
+          const played = {}, hadBye = {}, lastOpp = {};
+          ms.filter(m => m.round < round).forEach(function (m) {
+            const a = D.side(m, "A"), b = D.side(m, "B");
+            if (a === "BYE" || b === "BYE") { hadBye[a === "BYE" ? b : a] = true; return; }
+            if (!a || !b) return;
+            played[a < b ? a + "|" + b : b + "|" + a] = true;
+            if (m.round === round - 1) { lastOpp[a] = b; lastOpp[b] = a; }
+          });
+          const r = pairRound(st.type, active, played, hadBye, lastOpp);
+          fresh = r.pairs.map((p, k) => newMeeting(st.id, g.id, round, k, side(p[0]), side(p[1])))
+            .concat(r.byes.map((id, k) => byeMeeting(st, g, round, r.pairs.length + k, id)));
+        }
+        if (comp.kind === "teams") fresh.forEach(m => { m.sideA.refType = "team"; m.sideB.refType = "team"; });
+        const sig = (list) => list.map(m => m.sideA.id + ">" + (m.sideB.id || "bye")).sort().join(",");
+        if (round === last) {
+          if (sig(fresh) === sig(lastMs)) break;                                         // same draw: keep it
+          const gone = lastMs.map(m => m.id);
+          comp.meetings = comp.meetings.filter(m => gone.indexOf(m.id) === -1);
+          comp.matches = comp.matches.filter(x => gone.indexOf(x.meetingId) === -1);
+        }
+        comp.meetings = comp.meetings.concat(fresh);
+        comp.matches = comp.matches.concat(makeMatches(comp, fresh, division));
+        changed = true;
+        if (round === last + 1) break;
+      }
+    });
+    return changed;
   }
 
   function isByeMeeting(m) {
@@ -282,5 +438,6 @@ const CompGenerate = (function () {
   }
 
   return { roundRobin, splitGroups, bracketPositions, placeQualifiers, seedOrder, nextPow2, generateDivision, generateTeams, generateDraw,
+    advance, pairRound, defaultRounds, makeMatches,
     buildCourts, applyDraw, isByeMeeting, roundLabelKey, groupName, rngFor };
 })();

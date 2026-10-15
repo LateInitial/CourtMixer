@@ -46,6 +46,7 @@ const CompShell = (function () {
         undoStack.push({ label: label, doc: before, wasActive: true });
         if (undoStack.length > 10) undoStack.shift();
         const cleared = CompStandings.clearStale(comp);
+        CompGenerate.advance(comp);
         CompStore.save(comp); render();
         toastUndo(esc(t("settings.cleared", { n: cleared.length })));
       });
@@ -59,10 +60,12 @@ const CompShell = (function () {
     const open = comp.matches.filter(x => !D.outcome(D.meetingById[x.meetingId]).done);
     if (!open.length) return t("status.allPlayed");
     const stageOf = (x) => D.stageById[D.meetingById[x.meetingId].stageId];
-    if (open.every(x => stageOf(x).type === "knockout")) return t("status.knockouts");
-    const rr = comp.matches.filter(x => stageOf(x).type !== "knockout");
-    const total = Math.max.apply(null, rr.map(x => D.meetingById[x.meetingId].round).concat([1]));
-    const cur = Math.min.apply(null, open.filter(x => stageOf(x).type !== "knockout").map(x => D.meetingById[x.meetingId].round).concat([total]));
+    if (open.every(x => CompStandings.isKO(stageOf(x)))) return t("status.knockouts");
+    const rr = comp.matches.filter(x => !CompStandings.isKO(stageOf(x)));
+    // Swiss / points league rounds are drawn as they go: count the planned total
+    const planned = comp.stages.filter(s => s.config && s.config.rounds).map(s => s.config.rounds);
+    const total = Math.max.apply(null, rr.map(x => D.meetingById[x.meetingId].round).concat(planned, [1]));
+    const cur = Math.min.apply(null, open.filter(x => !CompStandings.isKO(stageOf(x))).map(x => D.meetingById[x.meetingId].round).concat([total]));
     return t("status.round", { n: cur, total: total });
   }
 
@@ -158,6 +161,7 @@ const CompShell = (function () {
   // Review -> Generate draw: status becomes live and the Courts tab opens.
   function generate(comp) {
     CompGenerate.applyDraw(comp, CompGenerate.generateDraw(comp));
+    CompGenerate.advance(comp); // a round 1 made only of byes moves straight on
     comp.status = "live";
     comp.log.push({ at: Date.now(), action: "generate" });
     CompStore.save(comp); CompStore.flush();
