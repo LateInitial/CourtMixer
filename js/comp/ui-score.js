@@ -21,7 +21,7 @@ const CompResults = (function () {
     };
     if (!stale.length) { go(); return true; }
     const D = CompStandings.derive(comp);
-    const list = stale.map(x => "• " + D.meetingLabel(D.meetingById[x.meetingId], false) + ": " + D.sideLabel(D.meetingById[x.meetingId], "A") + " v " + D.sideLabel(D.meetingById[x.meetingId], "B")).join("\n");
+    const list = stale.map(x => "• " + D.matchLabel(x, false) + ": " + D.sideLabel(D.meetingById[x.meetingId], "A") + " v " + D.sideLabel(D.meetingById[x.meetingId], "B")).join("\n");
     cmxConfirm({ title: t("results.cascade.title"), yes: t("results.cascade.yes"), danger: true, message: t("results.cascade", { list: list }) }, go);
     return false;
   }
@@ -146,7 +146,7 @@ const CompScore = (function () {
     const box = sheet().querySelector(".comp-sheet-box");
     const court = state.comp.courts.find(c => c.id === x.courtId);
     const nameA = D.sideLabel(m, "A"), nameB = D.sideLabel(m, "B");
-    let h = '<div class="cmx-modal-head"><span class="cmx-modal-title">' + esc((court ? court.name + " · " : "") + D.meetingLabel(m, false)) + '</span><button type="button" class="cmx-modal-x" data-act="close" aria-label="' + esc(t("wiz.close")) + '">×</button></div>' +
+    let h = '<div class="cmx-modal-head"><span class="cmx-modal-title">' + esc((court ? court.name + " · " : "") + D.matchLabel(x, false)) + '</span><button type="button" class="cmx-modal-x" data-act="close" aria-label="' + esc(t("wiz.close")) + '">×</button></div>' +
       '<div class="muted">' + esc(CompFormat.describe(f)) + "</div>";
     if (state.mode === "walkover") h += '<div class="muted">' + esc(t("score.wo.what")) + "</div>";
     if (state.mode !== "normal") {

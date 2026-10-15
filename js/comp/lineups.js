@@ -16,7 +16,9 @@ const CompLineups = (function () {
   // Keeps entries in step with the rosters: existing pairs whose two players are still regulars of
   // that team and division stay; leftover regulars are paired in roster order. Slots renumber 1..n.
   function syncTeamEntries(comp) {
-    const keep = [];
+    const teamIds = comp.teams.map(tm => tm.id), divIds = comp.divisions.map(d => d.id);
+    // anything that isn't a current team's pair in a current division is left alone (never deleted)
+    const keep = comp.entries.filter(e => !(e.teamId && teamIds.indexOf(e.teamId) !== -1 && divIds.indexOf(e.divisionId) !== -1));
     comp.teams.forEach(function (tm) {
       comp.divisions.forEach(function (d) {
         const regs = teamPlayers(comp, tm.id, d.id, "regular").map(p => p.id);
@@ -81,9 +83,11 @@ const CompLineups = (function () {
   }
 
   // Lineup problems for one team in one meeting: { warnings: [], errors: [] } (§6.2 step 7, §11).
-  function check(comp, meeting, which, lineup) {
+  // alreadyPlaying: players of this side in rubbers already on court or finished.
+  function check(comp, meeting, which, lineup, alreadyPlaying) {
     const s = comp.settings.lineup, warnings = [], errors = [];
     const count = {};
+    (alreadyPlaying || []).forEach(pid => { count[pid] = (count[pid] || 0) + 1; });
     Object.keys(lineup || {}).forEach(function (rid) {
       const rb = rubberById(comp, rid), ids = (lineup[rid] || []).filter(Boolean);
       if (ids.length === 2 && ids[0] === ids[1]) errors.push(t("lineup.err.same", { rubber: rb ? rb.label : "?" }));
@@ -110,13 +114,14 @@ const CompLineups = (function () {
   /* ===== Lineup editor (§10.3) ===== */
   // Shows every rubber of one team's side of a meeting that hasn't started. Fixed slots are
   // pre-filled; anything changed here is stored as the lineup for this meeting only.
-  function edit(comp, meetingId, which, onlyRubberId) {
+  function edit(comp, meetingId, which) {
     const D = CompStandings.derive(comp), m = D.meetingById[meetingId];
     if (!m) return;
     const teamId = D.side(m, which), team = comp.teams.find(x => x.id === teamId);
     if (!team) return;
-    const matches = comp.matches.filter(x => x.meetingId === m.id && x.status === "pending" && (!onlyRubberId || x.rubberId === onlyRubberId))
-      .sort((a, b) => a.order - b.order);
+    const all = (D.matchesOfMeeting[m.id] || []).slice().sort((a, b) => a.order - b.order);
+    const matches = all.filter(x => x.status === "pending");
+    const playing = [].concat.apply([], all.filter(x => x.status !== "pending").map(x => D.playerIdsOf(x, which)));
     if (!matches.length) return cmxAlert(t("lineup.nothing"));
     const draft = {};
     matches.forEach(x => { draft[x.rubberId] = D.playerIdsOf(x, which).slice(); while (draft[x.rubberId].length < 2) draft[x.rubberId].push(""); });
@@ -129,7 +134,7 @@ const CompLineups = (function () {
         esc(p.name + (p.role === "reserve" ? " (" + t("lineup.reserve") + ")" : "") + (p.divisionId !== rb.divisionId ? " · " + ((comp.divisions.find(d => d.id === p.divisionId) || {}).name || "") : "")) + "</option>").join("");
     }
     function body() {
-      const c = check(comp, m, which, draft);
+      const c = check(comp, m, which, draft, playing);
       return '<p class="cmx-modal-text">' + esc(t("lineup.hint", { team: team.name, vs: D.sideLabel(m, which === "A" ? "B" : "A") })) + "</p>" +
         matches.map(function (x) {
           const rb = rubberById(comp, x.rubberId) || { label: "?", divisionId: x.divisionId };
@@ -145,13 +150,13 @@ const CompLineups = (function () {
       const mo = box.querySelector("[data-more]"); if (mo) mo.onchange = function () { more = mo.checked; refresh(box); };
     }
     function refresh(box) { box.querySelector(".cmx-modal-body").innerHTML = body(); bind(box); }
-    const prev = previousLineup(comp, m, teamId);
+    const prev = previousLineup(D, m, teamId);
     const buttons = [{ label: t("lineup.save"), cls: "primary", onClick: function () {
-      const c = check(comp, m, which, draft);
+      const c = check(comp, m, which, draft, playing);
       if (c.errors.length) { cmxAlert(c.errors.join("\n")); return false; }
       save(comp, m.id, which, draft);
     } }];
-    if (prev && !onlyRubberId) buttons.push({ label: t("lineup.copyLast"), cls: "secondary", keepOpen: true, onClick: function (box) {
+    if (prev) buttons.push({ label: t("lineup.copyLast"), cls: "secondary", keepOpen: true, onClick: function (box) {
       matches.forEach(x => { const p = prev[x.rubberId]; if (p && p.length === 2) draft[x.rubberId] = p.slice(); });
       refresh(box); return false;
     } });
@@ -172,27 +177,31 @@ const CompLineups = (function () {
     showToast(esc(t("lineup.saved")));
   }
 
-  // The team's lineup from its most recent other meeting, for "Copy last lineup".
-  function previousLineup(comp, meeting, teamId) {
-    const others = comp.meetings.filter(m => m.id !== meeting.id && (m.lineupA || m.lineupB))
-      .map(m => ({ m, side: m.sideA.id === teamId ? "A" : m.sideB.id === teamId ? "B" : null })).filter(o => o.side);
-    const D = CompStandings.derive(comp);
-    others.forEach(o => { o.side = D.side(o.m, "A") === teamId ? "A" : D.side(o.m, "B") === teamId ? "B" : null; });
-    const withLineup = others.filter(o => o.side && o.m[o.side === "A" ? "lineupA" : "lineupB"]).sort((a, b) => b.m.round - a.m.round);
-    return withLineup.length ? withLineup[0].m[withLineup[0].side === "A" ? "lineupA" : "lineupB"] : null;
+  // The team's lineup from its latest meeting before this one (any stage, knockout included).
+  function previousLineup(D, meeting, teamId) {
+    const pos = (m) => D.stageById[m.stageId].order * 1000 + m.round;
+    let best = null;
+    D.comp.meetings.forEach(function (m) {
+      if (m.id === meeting.id || pos(m) >= pos(meeting)) return;
+      const sd = D.side(m, "A") === teamId ? "lineupA" : D.side(m, "B") === teamId ? "lineupB" : null;
+      if (sd && m[sd] && Object.keys(m[sd]).length && (!best || pos(m) > pos(best.m))) best = { m, l: m[sd] };
+    });
+    return best ? best.l : null;
   }
 
-  // Meetings in the queue whose rubbers wait for a team's lineup.
+  // Meetings in the queue whose rubbers wait for a team's lineup (worked out once per derived view).
   function needed(D) {
+    if (D._lineupsNeeded) return D._lineupsNeeded;
     const out = [];
     D.comp.meetings.forEach(function (m) {
       const a = D.side(m, "A"), b = D.side(m, "B");
       if (!a || !b || a === "BYE" || b === "BYE" || D.outcome(m).done) return;
       ["A", "B"].forEach(function (sd) {
-        const waiting = D.comp.matches.some(x => x.meetingId === m.id && x.status === "pending" && D.rubberNeeded(x) && D.playerIdsOf(x, sd).length < 2);
+        const waiting = (D.matchesOfMeeting[m.id] || []).some(x => x.status === "pending" && D.rubberNeeded(x) && D.playerIdsOf(x, sd).length < 2);
         if (waiting) out.push({ meeting: m, side: sd, teamId: sd === "A" ? a : b });
       });
     });
+    D._lineupsNeeded = out;
     return out;
   }
 

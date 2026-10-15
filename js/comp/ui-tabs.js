@@ -293,7 +293,8 @@ const CompUI = (function () {
     const run = (mode) => {
       CompShell.snapshot(t("entries.withdraw"), comp);
       e.withdrawn = true; e.withdrawMode = mode;
-      (e.playerIds || []).forEach(id => { const p = comp.players.find(x => x.id === id); if (p) p.withdrawn = true; });
+      const ids = e.playerIds || comp.players.filter(p => p.teamId === e.id).map(p => p.id); // a team: its whole roster
+      ids.forEach(id => { const p = comp.players.find(x => x.id === id); if (p) p.withdrawn = true; });
       comp.matches.forEach(x => { // anything on court for them goes back
         const m = comp.meetings.find(mm => mm.id === x.meetingId);
         if (x.status === "onCourt" && x.entryIds && (x.entryIds.A === e.id || x.entryIds.B === e.id)) CompStandings.resetMatch(x);
@@ -475,5 +476,5 @@ const CompUI = (function () {
   }
 
   return { renderCourts, renderStandings, renderResults, renderEntries, onClick, onInput, tick, startMatch, sendBack, regenerateDivision, ui,
-    helpers: { seg, chips, playerNames, setsText, peopleDialog: function () { return peopleDialog.apply(null, arguments); }, withdraw: function (c, id) { return withdraw(c, id); } } };
+    helpers: { seg, chips, playerNames, setsText, peopleDialog, withdraw } };
 })();

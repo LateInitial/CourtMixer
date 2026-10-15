@@ -177,7 +177,7 @@ const CompGenerate = (function () {
   function generateTeams(comp) {
     const teams = comp.teams.filter(tm => !tm.withdrawn).map(tm => ({ id: tm.id, seed: tm.seed || null }));
     const plan = (comp.settings.stagePlan || {}).all || { type: "roundRobin" };
-    const r = buildStages(comp, teams, plan, "teams" + (comp.settings.drawSeq ? ":" + comp.settings.drawSeq : ""), null);
+    const r = buildStages(comp, teams, plan, "teams", null);
     r.meetings.forEach(m => { m.sideA.refType = "team"; m.sideB.refType = "team"; });
     const rubbers = (comp.settings.meetingTemplate || []).slice().sort((a, b) => a.order - b.order);
     const byId = {}; comp.divisions.forEach(d => { byId[d.id] = d; });

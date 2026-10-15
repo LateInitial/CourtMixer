@@ -605,6 +605,8 @@ STR.en = {
   "tb.matchDiff": "Match difference",
   "review.team": "{team}: {players} players, {pairs} pair(s)",
   "review.meetingPts": "Win {w}, draw {d}, loss {l}",
+  "review.unusedPair": "{team}'s pair {pair} isn't in any rubber \u2014 add a rubber or Rebuild from pairs.",
+  "teamEntries.templateOld": "The meeting template no longer covers every pair \u2014 check Meeting template (Rebuild from pairs).",
   "review.missingPair": "{team} has no pair for {rubber} \u2014 its captain picks who plays.",
   "review.teamMatches": "{m} meetings, {n} matches",
   "review.perTeam": "{min}\u2013{max} meetings per team",

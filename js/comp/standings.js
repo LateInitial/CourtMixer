@@ -10,8 +10,9 @@ const CompStandings = (function () {
     comp.stages.forEach(s => { stageById[s.id] = s; });
     comp.entries.forEach(e => { entryById[e.id] = e; });
     comp.divisions.forEach(d => { divisionById[d.id] = d; });
-    const isTeams = comp.kind === "teams", teamById = {}, matchesOfMeeting = {};
+    const isTeams = comp.kind === "teams", teamById = {}, matchesOfMeeting = {}, rubberById = {};
     (comp.teams || []).forEach(tm => { teamById[tm.id] = tm; });
+    ((comp.settings || {}).meetingTemplate || []).forEach(r => { rubberById[r.id] = r; });
     comp.matches.forEach(x => { (matchesOfMeeting[x.meetingId] = matchesOfMeeting[x.meetingId] || []).push(x); });
     const sideCache = {}, outCache = {}, tableCache = {}, teamCache = {};
     const resolving = {};
@@ -64,6 +65,12 @@ const CompStandings = (function () {
         if (a === "BYE" && b && b !== "BYE") r = { winner: "B", done: true, kind: "bye", match };
         else if (b === "BYE" && a && a !== "BYE") r = { winner: "A", done: true, kind: "bye", match };
         else if (!isTeams && match && match.status === "done" && match.winner) r = { winner: match.winner, done: true, kind: match.outcome === "walkover" ? "walkover" : "result", match };
+        else if (isTeams && a && b && a !== "BYE" && b !== "BYE" && !(withdrawn(a) && withdrawn(b)) &&
+          !((withdrawn(a) || withdrawn(b)) && (teamById[withdrawn(a) ? a : b] || {}).withdrawMode === "void" && meeting.groupId)) {
+          // Teams: played rubbers keep their results; a withdrawn team gives up only what's left.
+          const tr = teamResult(meeting);
+          r = { winner: tr.done ? tr.winner : null, done: tr.done, kind: tr.allWalkover ? "walkover" : "result", match: null, team: tr };
+        }
         else if (a && b && a !== "BYE" && b !== "BYE" && withdrawn(a) && withdrawn(b)) {
           // Both pairs withdrew: nothing to play. In a group it simply doesn't count; in a knockout
           // side A goes through on paper, so the next opponent then gets a walkover.
@@ -74,17 +81,13 @@ const CompStandings = (function () {
           if (e.withdrawMode === "void" && meeting.groupId) r = { winner: null, done: true, kind: "void", match };
           else r = { winner: withdrawn(a) ? "B" : "A", done: true, kind: "walkover", match };
         }
-        else if (isTeams && a && b && a !== "BYE" && b !== "BYE") {
-          const tr = teamResult(meeting);
-          r = { winner: tr.done ? tr.winner : null, done: tr.done, kind: "result", match: null, team: tr };
-        }
       }
       outCache[meeting.id] = r;
       return r;
     }
 
     /* ===== Teams: a meeting is decided by its rubbers (§11) ===== */
-    function rubberOf(x) { return (typeof CompLineups !== "undefined" && CompLineups.rubberById(comp, x.rubberId)) || {}; }
+    function rubberOf(x) { return rubberById[x.rubberId] || {}; }
     // One finished rubber oriented A/B: matches, sets, games (walkovers per walkoverScore).
     function rubberTally(x, f) {
       const out = { mA: x.winner === "A" ? 1 : 0, mB: x.winner === "B" ? 1 : 0, sA: 0, sB: 0, gA: 0, gB: 0 };
@@ -108,7 +111,12 @@ const CompStandings = (function () {
         deadIds: {}, needDecider: false, needsDecision: false };
       const add = (x) => { const v = rubberTally(x, f); r.matchesA += v.mA; r.matchesB += v.mB; r.setsA += v.sA; r.setsB += v.sB; r.gamesA += v.gA; r.gamesB += v.gB; };
       regular.filter(x => x.status === "done").forEach(add);
-      const pending = regular.filter(x => x.status !== "done");
+      // A withdrawn team gives up every rubber not played yet (walkovers to the other side).
+      const wA = withdrawn(side(meeting, "A")), wB = withdrawn(side(meeting, "B"));
+      const forfeit = (wA !== wB) ? regular.filter(x => x.status !== "done") : [];
+      forfeit.forEach(x => add({ winner: wA ? "B" : "A", outcome: "walkover", sets: [] }));
+      r.allWalkover = forfeit.length > 0 && forfeit.length === regular.length;
+      const pending = regular.filter(x => x.status !== "done" && forfeit.indexOf(x) === -1);
       if (!tally) {
         const lead = r.matchesA - r.matchesB;
         if (Math.abs(lead) > pending.length) { r.decided = true; r.winner = lead > 0 ? "A" : "B"; }
@@ -130,8 +138,8 @@ const CompStandings = (function () {
         else if (ts.splitRule === "draw" && !ko) { r.winner = "draw"; r.done = true; }
         else { r.winner = byGames() || (ko ? null : "draw"); r.done = !!r.winner; r.needsDecision = !r.winner; }
       }
-      if (dec && dec.status === "done") add(dec);          // a played decider always counts
-      else if (dec && !r.needDecider) r.deadIds[dec.id] = true; // otherwise it isn't needed
+      if (dec && dec.status === "done") add(dec);                                  // a played decider always counts
+      else if (dec && dec.status === "pending" && !r.needDecider) r.deadIds[dec.id] = true; // otherwise it isn't needed
       teamCache[meeting.id] = r;
       return r;
     }
@@ -139,7 +147,7 @@ const CompStandings = (function () {
     function teamScore(meeting) {
       const o = outcome(meeting);
       if (!o.done || !o.winner || o.kind === "void" || o.kind === "bye") return null;
-      if (o.kind === "result") { const r = o.team; return { mA: r.matchesA, mB: r.matchesB, sA: r.setsA, sB: r.setsB, gA: r.gamesA, gB: r.gamesB }; }
+      if (o.team) { const r = o.team; return { mA: r.matchesA, mB: r.matchesB, sA: r.setsA, sB: r.setsB, gA: r.gamesA, gB: r.gamesB }; }
       if (o.kind === "override") return { mA: 0, mB: 0, sA: 0, sB: 0, gA: 0, gB: 0 };
       // walkover (withdrawn team): every regular rubber goes to the other side
       const st = stageById[meeting.stageId], f = formatFor(st);

@@ -217,8 +217,9 @@
   const trialCache = new Map();
   function trial(comp, plan, divId) {
     const s = comp.settings;
-    const key = JSON.stringify([comp.id, plan, divId, s.formatPlan, s.formatPlan === "perDivision" ? s.stagePlan : null, s.courtsCount, s.courtMode, s.courtAssign, s.matchFormats,
-      comp.entries.map(e => [e.id, e.divisionId, e.seed, e.withdrawn])]);
+    const key = JSON.stringify([comp.id, comp.kind, plan, divId, s.formatPlan, s.formatPlan === "perDivision" ? s.stagePlan : null, s.courtsCount, s.courtMode, s.courtAssign, s.matchFormats,
+      comp.entries.map(e => [e.id, e.divisionId, e.seed, e.withdrawn, e.playerIds]), (comp.teams || []).map(tm => [tm.id, tm.withdrawn]),
+      s.meetingTemplate, s.lineup]);
     if (trialCache.has(key)) return trialCache.get(key);
     const r = trialUncached(comp, plan, divId);
     if (trialCache.size > 60) trialCache.clear();

@@ -651,7 +651,7 @@ function runSelfTests(){
     const replaced = rayLineup[a1.rubberId][0];
     rayLineup[a1.rubberId][0] = ray.id;
     const TFD2 = CompStandings.derive(TF);
-    eq("all six rubbers ready once lineups are in", CompSchedule.readyList(TFD2).length >= 1, true);
+    eq("all six rubbers ready once lineups are in", CompSchedule.readyList(TFD2).length, 6);
     CompUI.startMatch(TF, a1.id, TF.courts[0].id);
     CompResults.apply(TF, a1.id, { sets: [{ a: 21, b: 15 }], winner: ray.teamId === teamA ? "A" : "B" });
     ok("stats follow the reserve, not the replaced player", a1.sideA.playerIds.concat(a1.sideB.playerIds).indexOf(ray.id) !== -1 && a1.sideA.playerIds.concat(a1.sideB.playerIds).indexOf(replaced) === -1);
@@ -667,6 +667,38 @@ function runSelfTests(){
     TW2.teams[0].withdrawn = true; TW2.teams[0].withdrawMode = "walkover";
     const tw = CompStandings.derive(TW2).table(TW2.stages[0].id, TW2.stages[0].groups[0].id);
     eq("withdrawn team: opponents get every match", tw.map(r => [r.points, r.matchDiff]), [[6, 6], [0, -6]]);
+
+    out.push("team review fixes");
+    const TWP = teamComp({});
+    playMeeting(TWP, "AAAABB");
+    const winnerTeam = CompStandings.derive(TWP).side(TWP.meetings[0], "A");
+    const wt = TWP.teams.find(x => x.id === winnerTeam); wt.withdrawn = true; wt.withdrawMode = "walkover";
+    eq("withdrawing a team keeps the meetings it already played", CompStandings.derive(TWP).outcome(TWP.meetings[0]).winner, "A");
+    const TWQ = teamComp({ teams: { resultMode: "tally" } });
+    playMeeting(TWQ, "AA----");
+    const loserTeam = TWQ.teams.find(x => x.id === CompStandings.derive(TWQ).side(TWQ.meetings[0], "A"));
+    loserTeam.withdrawn = true; loserTeam.withdrawMode = "walkover";
+    const twq = CompStandings.derive(TWQ).teamResult(TWQ.meetings[0]);
+    eq("a team withdrawing mid-meeting gives up only the rubbers left", [twq.matchesA, twq.matchesB, twq.done], [2, 4, true]);
+    const SW = CompModel.newCompetition({ name: "Switch" });
+    CompModel.setDivisionCount(SW, 1);
+    for (let i = 0; i < 3; i++) Wizard.pairsUtil.addPair(SW, SW.divisions[0].id, ["S" + i + "a", "S" + i + "b"], ["M", "M"]);
+    SW.kind = "teams"; CompModel.setTeamCount(SW, 2); CompLineups.syncTeamEntries(SW); SW.kind = "pairs";
+    eq("switching to teams and back keeps the pairs", SW.entries.length, 3);
+    const DUP = CompModel.duplicate(Object.assign(JSON.parse(JSON.stringify(TWP)), { status: "finished" }));
+    ok("duplicate keeps registered reserves and brings withdrawn teams back", DUP.players.some(p => p.name === "Reserve Ray") && DUP.teams.every(x => !x.withdrawn));
+    const EST = teamComp({});
+    CompModel.setTeamCount(EST, 4);
+    EST.teams.slice(2).forEach(tm => EST.divisions.forEach(d => { for (let i = 0; i < 4; i++) Wizard.teamsUtil.addPlayer(EST, tm.id, d.id, tm.name + d.name + i, "M", "regular"); }));
+    CompLineups.syncTeamEntries(EST); EST.settings.courtsCount = 12;
+    const estDraw = CompGenerate.generateDraw(EST), estR = CompSchedule.estimate(EST, estDraw);
+    ok("team estimate: a pair can't be on two courts at once (3 meetings x 15 min >= 45)", estR.minutes >= 45 && estDraw.matches.length === 36);
+    const UT = teamComp({});
+    const t0 = UT.teams[0];
+    for (let i = 0; i < 2; i++) Wizard.teamsUtil.addPlayer(UT, t0.id, UT.divisions[0].id, "Extra" + i, "M", "regular");
+    CompLineups.syncTeamEntries(UT); UT.wizard.visited.template = true;
+    ok("a new pair the template doesn't cover is flagged", UT.entries.some(e => e.teamId === t0.id && e.slot === 3) &&
+      !UT.settings.meetingTemplate.some(r => r.slot === 3));
 
     out.push("use recommended, then generate");
     const ur = CompModel.newCompetition({ name: "Rec" });

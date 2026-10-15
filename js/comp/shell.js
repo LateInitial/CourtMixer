@@ -39,7 +39,7 @@ const CompShell = (function () {
     const stale = CompStandings.staleMatches(comp);
     if (!stale.length) { CompStore.save(comp); render(); return; }
     const D = CompStandings.derive(comp);
-    const list = stale.map(x => "\u2022 " + D.meetingLabel(D.meetingById[x.meetingId], false)).join("\n");
+    const list = stale.map(x => "\u2022 " + D.matchLabel(x, false)).join("\n");
     cmxConfirm({ title: t("results.cascade.title"), yes: t("results.cascade.yes"), danger: true, message: t("settings.cascade", { list: list }),
       onNo: function () { CompStore.restore(before); render(); } },
       function () {

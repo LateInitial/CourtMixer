@@ -127,13 +127,18 @@ const CompSchedule = (function () {
     const fs = s.matchFormats || {};
     const perOf = (st) => { const f = st && (fs[st.matchFormatId] || fs.main); return f ? CompFormat.minutesFor(f) : 20; };
     const courts = Math.max(1, s.courtsCount || 1);
-    const meetings = {}, matchOf = {};
+    const meetings = {}, matchesOf = {};
     draw.meetings.forEach(m => { meetings[m.id] = m; });
-    draw.matches.forEach(x => { matchOf[x.meetingId] = x; });
+    draw.matches.forEach(x => { (matchesOf[x.meetingId] = matchesOf[x.meetingId] || []).push(x); });
+    const teams = comp.kind === "teams";
     const stageOf = {}; draw.stages.forEach(st => { stageOf[st.id] = st; });
     const entry = {}; comp.entries.forEach(e => { entry[e.id] = e; });
     const groupMatches = {};
-    draw.meetings.forEach(m => { if (m.groupId && matchOf[m.id]) (groupMatches[m.groupId] = groupMatches[m.groupId] || []).push(matchOf[m.id].id); });
+    draw.meetings.forEach(function (m) {
+      if (!m.groupId || !matchesOf[m.id]) return;
+      const list = groupMatches[m.groupId] = groupMatches[m.groupId] || [];
+      matchesOf[m.id].forEach(x => list.push(x.id));
+    });
     // dependencies: knockout sources (skipping byes), group completion
     function depsOf(m, seen) {
       const out = [];
@@ -143,7 +148,7 @@ const CompSchedule = (function () {
         if (src.kind === "groupRank") out.push.apply(out, groupMatches[src.groupId] || []);
         else if (src.meetingId) {
           const m2 = meetings[src.meetingId];
-          if (m2 && matchOf[m2.id]) out.push(matchOf[m2.id].id);
+          if (m2 && matchesOf[m2.id]) out.push.apply(out, matchesOf[m2.id].map(x => x.id)); // every rubber of it
           else if (m2 && !seen[m2.id]) { seen[m2.id] = true; out.push.apply(out, depsOf(m2, seen)); }
         }
       });
@@ -152,7 +157,16 @@ const CompSchedule = (function () {
     const tasks = draw.matches.map((x, i) => {
       const m = meetings[x.meetingId], st = stageOf[m.stageId];
       const ids = [m.sideA.id, m.sideB.id].filter(Boolean);
-      const players = [].concat.apply([], ids.map(id => (entry[id] && entry[id].playerIds) || []));
+      let players = [].concat.apply([], ids.map(id => (entry[id] && entry[id].playerIds) || []));
+      if (teams) {
+        // registered pair for the slot, or a stand-in token so a team's slot can't be on two courts
+        players = [];
+        [["A", m.sideA.id], ["B", m.sideB.id]].forEach(function (sd) {
+          if (!sd[1]) return;
+          const ps = CompLineups.playersFor(comp, m, x, sd[0], sd[1]);
+          players.push.apply(players, ps.length ? ps : [sd[1] + ":" + x.rubberId]);
+        });
+      }
       const allowed = s.courtMode === "dedicated" ? (s.courtAssign && s.courtAssign[x.divisionId]) || null : null;
       return { id: x.id, key: (st ? st.order : 0) * 1000 + m.round - (m.thirdPlace ? 0.5 : 0), idx: i, deps: depsOf(m, {}), players, per: perOf(st), allowed: allowed && allowed.length ? allowed : null };
     }).sort((a, b) => a.key - b.key || a.idx - b.idx);

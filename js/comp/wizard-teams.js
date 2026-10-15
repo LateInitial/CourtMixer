@@ -27,6 +27,23 @@
     });
   }
   function defaultGender(d) { return d && d.category === "WD" ? "F" : "M"; }
+  // Pairs registered but used by no rubber (e.g. a 3rd pair added after the template was built).
+  function unusedSlots(comp) {
+    const tpl = comp.settings.meetingTemplate || [], out = [];
+    if (!tpl.length) return out;
+    comp.entries.filter(e => e.teamId && e.slot).forEach(function (e) {
+      if (!tpl.some(r => r.divisionId === e.divisionId && r.slot === e.slot)) {
+        const tm = comp.teams.find(x => x.id === e.teamId);
+        out.push(t("review.unusedPair", { team: tm ? tm.name : "?", pair: e.label }));
+      }
+    });
+    return out;
+  }
+  // After roster changes: if the template was already built and no longer covers every pair,
+  // flag Meeting template for review (the wizard's "check this step" marker).
+  function flagTemplate(comp) {
+    if (comp.wizard.visited.template && unusedSlots(comp).length) comp.wizard.needsReview.template = true;
+  }
 
   /* ===== Step 6: Players and pairs (teams) ===== */
   function teamWarnings(comp, tm) {
@@ -87,8 +104,9 @@
       h += slots.map(e => '<div class="wiz-item"><span class="wiz-pair-n wide">' + esc(e.label) + "</span>" + [0, 1].map(i =>
         '<select class="wiz-select" data-field="tmSlot" data-id="' + esc(e.id) + '" data-i="' + i + '" aria-label="' + esc(e.label) + '">' +
         regs.map(p => '<option value="' + esc(p.id) + '"' + (e.playerIds[i] === p.id ? " selected" : "") + ">" + esc(p.name) + "</option>").join("") + "</select>").join("") + "</div>").join("");
-      const w = teamWarnings(comp, tm);
+      const w = teamWarnings(comp, tm).concat(unusedSlots(comp).length ? [t("teamEntries.templateOld")] : []);
       if (w.length) h += '<div class="wiz-warn">' + w.map(x => "<div>" + esc(x) + "</div>").join("") + "</div>";
+      flagTemplate(comp);
       return h;
     },
     act: function (comp, act, el, group, value) {
@@ -332,7 +350,8 @@
       comp.teams.forEach(tm => tpl.forEach(r => {
         if (!CompLineups.isFreeRubber(comp, r) && !comp.entries.some(e => e.teamId === tm.id && e.divisionId === r.divisionId && e.slot === r.slot)) missing.push(t("review.missingPair", { team: tm.name, rubber: r.label }));
       }));
-      if (missing.length) h += '<div class="wiz-warn">' + missing.map(x => "<div>" + esc(x) + "</div>").join("") + "</div>";
+      const allWarn = missing.concat(unusedSlots(comp));
+      if (allWarn.length) h += '<div class="wiz-warn">' + allWarn.map(x => "<div>" + esc(x) + "</div>").join("") + "</div>";
       if (!bad.length) {
         const draw = CompGenerate.generateDraw(comp), est = CompSchedule.estimate(comp, draw);
         const range = P.matchRange(comp, draw);

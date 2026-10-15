@@ -105,9 +105,11 @@ const CompModel = (function () {
   function duplicate(src) {
     const c = JSON.parse(JSON.stringify(src));
     c.entries.forEach(e => { e.withdrawn = false; delete e.withdrawMode; });
+    (c.teams || []).forEach(tm => { tm.withdrawn = false; delete tm.withdrawMode; });
     const inEntry = {};
     c.entries.forEach(e => e.playerIds.forEach(id => { inEntry[id] = true; }));
-    c.players = c.players.filter(p => inEntry[p.id] || !(p.replacedBy || p.subFor || p.role === "reserve"));
+    // registered reserves stay; one-match stand-ins (subFor) and replaced players go
+    c.players = c.players.filter(p => inEntry[p.id] || !(p.replacedBy || p.subFor));
     c.players.forEach(p => { p.withdrawn = false; delete p.replacedBy; delete p.subFor; });
     c.divisions.forEach(d => { delete d.drawSeq; });
     const now = Date.now();
