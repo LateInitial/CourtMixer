@@ -40,7 +40,7 @@ A simple, self-contained matchmaking app for social **court sports** — badmint
 
 ## Tech
 
-Plain HTML, CSS and JavaScript — no framework, no bundler, no build step needed to run it. `index.html` holds the markup and loads `css/app.css` plus the scripts in `js/`. All data is stored locally in your browser via `localStorage`, always through one small storage layer (`js/core/store.js`), which keeps working in memory if the browser blocks storage. The version is shown in the footer, and stamped into anything you share or export. Adding `?selftest` to the URL runs the built-in test suite. Competition mode (fixed pairs and team events) is being built step by step; until it's ready, it only appears when the URL contains `?comp`, and switching to it never changes your social session.
+Plain HTML, CSS and JavaScript — no framework, no bundler, no build step needed to run it. `index.html` holds the markup and loads the stylesheets in `css/` and the scripts in `js/`. All data is stored locally in your browser via `localStorage`, always through one small storage layer (`js/core/store.js`), which keeps working in memory if the browser blocks storage. The version is shown in the footer, and stamped into anything you share or export. Adding `?selftest` to the URL runs the built-in test suite. Competition mode (fixed pairs and team events) is being built step by step; until it's ready, it only appears when the URL contains `?comp`, and switching to it never changes your social session.
 
 Each release also attaches a single self-contained `CourtMixer-vX.Y.Z.html` built by `tools/build-single-file.py`, for running the app straight from a downloaded file.
 
