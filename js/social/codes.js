@@ -48,7 +48,7 @@ function _cmxDecode(text){
   // Find the code wherever it sits. People copy the whole chat message, so there is usually
   // text before and after it. The body is a run of LZString's URI-safe alphabet, which stops
   // at the first space or newline and therefore never swallows the words after the code.
-  var m=s.match(/CMX[RS]1:([A-Za-z0-9+\-$]+)/);
+  var m=s.match(/CMX[RSC]1:([A-Za-z0-9+\-$]+)/);
   var body = m ? m[1] : s;
   var out=null;
   try{ var j=LZString.decompressFromEncodedURIComponent(body); if(j){ out=JSON.parse(j); } }catch(e){ out=null; }
@@ -94,6 +94,7 @@ function cmxImportText(kind){
           var t=box.querySelector("#cmxCodeIn"); var txt=t?t.value:""; var msg=box.querySelector("#cmxImportMsg");
           var data=_cmxDecode(txt);
           if(!data || data.app!=="CourtMixer"){ if(msg){ msg.textContent="That code isn't a valid CourtMixer code."; msg.className="cmx-copymsg err"; } return false; }
+          if(data.type==="competition"){ if(msg){ msg.textContent="That's a competition code — import it in Competition mode (\u{1F3C6} in the header)."; msg.className="cmx-copymsg err"; } return false; }
           cmxCloseModal();
           if(isRoster) applyRosterImport(data); else applySessionImport(data);
           return false;

@@ -199,12 +199,17 @@ const CompShell = (function () {
     const open = comp.matches.filter(x => !D.outcome(D.meetingById[x.meetingId]).done).length;
     cmxConfirm({ title: t("menu.finish"), yes: t("menu.finish"), message: open ? t("finish.openMatches", { n: open }) : t("finish.confirm") }, function () {
       snapshot(t("menu.finish"), comp);
-      comp.status = "finished"; CompStore.save(comp); render();
+      // §10.6: finishing freezes the awards and shows them
+      CompFacts.freeze(comp);
+      comp.status = "finished"; CompStore.save(comp);
+      tab = "standings"; CompUI.ui.group = "awards";
+      render();
     });
   }
   function reopen() {
     const comp = CompStore.getActive();
     if (!comp) return;
+    CompFacts.unfreeze(comp);
     comp.status = "live"; CompStore.save(comp); render();
   }
 
@@ -308,11 +313,14 @@ const CompShell = (function () {
     if (live) {
       items.push({ label: t("menu.settings"), cls: "secondary", onClick: showSettings });
       items.push({ label: t("menu.summary"), cls: "secondary", onClick: showSummary });
+      items.push({ label: t("menu.share"), cls: "secondary", onClick: function () { CompShare.showShare(CompStore.getActive()); } });
+      items.push({ label: t("menu.export"), cls: "secondary", onClick: function () { CompShare.showExport(CompStore.getActive()); } });
       if (comp.status === "live") items.push({ label: t("menu.finish"), cls: "secondary", onClick: finish });
       else items.push({ label: t("menu.reopen"), cls: "secondary", onClick: reopen });
     }
     if (CompStore.list().length) items.push({ label: t("menu.switch"), cls: "secondary", onClick: showSwitch });
     items.push({ label: t("menu.new"), cls: "secondary", onClick: startNew });
+    items.push({ label: t("menu.import"), cls: "secondary", onClick: function () { CompShare.showImport(function () { render(); }); } });
     if (comp) items.push({ label: t("menu.archive"), cls: "secondary", onClick: archive });
     if (comp) items.push({ label: t("menu.delete"), cls: "danger", onClick: remove });
     items.push({ label: t("wiz.close"), cls: "ghost", onClick: function () {} });
@@ -334,7 +342,7 @@ const CompShell = (function () {
     if (!b) return;
     const act = b.dataset.act;
     if (act === "new") startNew();
-    else if (act === "import") cmxAlert(t("import.later"));
+    else if (act === "import") CompShare.showImport(function () { render(); });
     else if (act === "open") open(b.dataset.id);
     else if (act === "reopen") reopen();
     else if (comp) CompUI.onClick(comp, e);

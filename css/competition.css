@@ -197,3 +197,20 @@
 .res-rubber .win { font-weight: 800; }
 .res-rubber.dead { opacity: .55; }
 .team-roster { font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
+
+/* ===== Awards and fun facts (Phase 6) ===== */
+.aw-card { display: flex; flex-direction: column; gap: 8px; }
+.aw-head { font-weight: 700; font-size: 12px; letter-spacing: .04em; text-transform: uppercase; color: #6a769f; }
+.aw-sub { font-size: 12.5px; color: var(--muted, #5f6d94); }
+.aw-div { font-weight: 700; font-size: 13px; color: #8d5f1f; margin-top: 4px; }
+.aw-row { display: flex; gap: 12px; align-items: flex-start; background: #f8faff; border: 1px solid #e1e9ff; border-radius: 10px; padding: 10px 12px; }
+.aw-em { font-size: 22px; line-height: 1.2; flex-shrink: 0; }
+.aw-body { min-width: 0; flex: 1; }
+.aw-label { font-size: 12px; font-weight: 700; color: #6a769f; text-transform: uppercase; letter-spacing: .03em; }
+.aw-who { font-weight: 700; font-size: 15px; color: #1b2340; overflow-wrap: anywhere; margin-top: 2px; }
+.aw-and { color: #6a769f; font-weight: 600; }
+.aw-note { font-size: 12.5px; color: #5f6d94; margin-top: 2px; overflow-wrap: anywhere; }
+.cf-fact { display: flex; gap: 12px; align-items: flex-start; background: #f8faff; border: 1px solid #e1e9ff; border-radius: 10px; padding: 10px 12px; }
+.cf-em { font-size: 20px; line-height: 1.4; flex-shrink: 0; }
+.cf-tx { font-size: 13.5px; color: #3b4e84; line-height: 1.55; overflow-wrap: anywhere; min-width: 0; }
+.cf-tx strong { color: #1b2340; }

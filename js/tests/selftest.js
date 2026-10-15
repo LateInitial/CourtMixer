@@ -581,7 +581,7 @@ function runSelfTests(){
       const c = CompModel.newCompetition({ name: "Teams" });
       CompModel.applyPreset(c, opts.flexible ? "teamsFlexible" : "teamsFixed");
       c.sport = "badminton";
-      CompModel.setDivisionCount(c, 3); CompModel.setTeamCount(c, 2);
+      CompModel.setDivisionCount(c, 3); CompModel.setTeamCount(c, opts.n || 2);
       c.teams.forEach(tm => c.divisions.forEach(d => { for (let i = 0; i < 4; i++) Wizard.teamsUtil.addPlayer(c, tm.id, d.id, tm.name + d.name + i, "M", "regular"); }));
       Wizard.teamsUtil.addPlayer(c, c.teams[0].id, c.divisions[0].id, "Reserve Ray", "M", "reserve");
       CompLineups.syncTeamEntries(c);
@@ -845,6 +845,83 @@ function runSelfTests(){
     const gpQual = GP.stages[0].groups.reduce((a, g) => a.concat(GPD.table(GP.stages[0].id, g.id).slice(0, 2).map(r => r.id)), []);
     const gpIn = GP.meetings.filter(m => m.stageId === gpPlate.id && m.round === 1).reduce((a, m) => a.concat([GPD.side(m, "A"), GPD.side(m, "B")]), []).filter(x => x !== "BYE");
     ok("groups + plate: the plate holds the non-qualifiers only, and everything finishes", gpIn.length === 10 - gpQual.length && gpIn.every(x => gpQual.indexOf(x) === -1) && GP.meetings.every(m => GPD.outcome(m).done));
+
+    out.push("fun facts, awards, sharing");
+    // play every ready match with varied but valid scores (seeded), as the Courts tab would
+    const playAll = (c, seed) => {
+      let st = seed || 7; const rnd = () => { st = (st * 16807) % 2147483647; return st / 2147483647; };
+      for (let i = 0; i < 2000; i++) {
+        const D = CompStandings.derive(c), x = CompSchedule.readyList(D)[0];
+        if (!x) return CompStandings.derive(c);
+        const f = D.formatFor(D.stageById[D.meetingById[x.meetingId].stageId]);
+        const aw = rnd() < 0.55, lose = Math.floor(rnd() * (f.target - 1));
+        if (!x.sideA.playerIds.length) { x.sideA.playerIds = D.playerIdsOf(x, "A"); x.sideB.playerIds = D.playerIdsOf(x, "B"); }
+        x.endedAt = 1700000000000 + i * 60000;
+        CompResults.apply(c, x.id, { sets: [aw ? { a: f.target, b: lose } : { a: lose, b: f.target }], winner: aw ? "A" : "B" });
+        CompGenerate.advance(c);
+      }
+      return CompStandings.derive(c);
+    };
+    const TF4 = teamComp({ n: 5 }), TF4D = playAll(TF4, 11);
+    const tfs = CompFacts.teamFacts(TF4, TF4D);
+    eq("teams: exactly one fact per team, about that team", [tfs.length, tfs.every((f, i) => f && f.teams[0] === TF4.teams[i].id && f.html.indexOf(esc(TF4.teams[i].name)) !== -1)], [5, true]);
+    ok("team facts prefer different kinds", new Set(tfs.map(f => f.code)).size >= 3);
+    const NEG = /\b(lost every|worst|bottom|last place|losing streak|never won|failed)\b/i;
+    const FC = dynComp(8, { type: "groups", groupSize: 4, advance: 2, thirdPlace: true }), FCD = playAll(FC, 5);
+    const hl = CompFacts.highlights(FC, FCD), hl2 = CompFacts.highlights(FC, CompStandings.derive(FC));
+    const named = [].concat.apply([], hl.map(f => f.subjects));
+    ok("highlights: up to 3, nobody named twice, at least one pair fact", hl.length >= 1 && hl.length <= 3 && new Set(named).size === named.length && hl.some(f => f.kind === "pair" || f.kind === "team"));
+    eq("highlights hold still (seeded from the results)", hl.map(f => f.html), hl2.map(f => f.html));
+    ok("facts are positive", hl.concat(tfs).every(f => !NEG.test(f.html.replace(/<[^>]+>/g, ""))));
+    const awF = CompFacts.awards(FC, FCD), ko = FC.stages.find(x => x.type === "knockout");
+    const finM = FC.meetings.filter(m => m.stageId === ko.id && !m.thirdPlace).sort((a, b) => b.round - a.round)[0];
+    eq("champion is the final's winner", awF.find(a => a.key === "champion").who[0].id, FCD.side(finM, FCD.outcome(finM).winner));
+    ok("pairs mode: MVP is a pair; match of the day is a decided match", awF.find(a => a.key === "mvp").who.every(w => w.kind === "entry") && awF.some(a => a.key === "matchOfDay"));
+    // a circle (A beat B, B beat C, C beat A, all 4-2): level on everything
+    const RRC = dynComp(3, { type: "roundRobin" }), rrD0 = CompStandings.derive(RRC), seedOfId = (id) => RRC.entries.find(e => e.id === id).seed;
+    RRC.matches.forEach(x => { const m = rrD0.meetingById[x.meetingId], a = seedOfId(rrD0.side(m, "A")), b = seedOfId(rrD0.side(m, "B"));
+      const aWins = (a === 1 && b === 2) || (a === 2 && b === 3) || (a === 3 && b === 1);
+      CompResults.apply(RRC, x.id, { sets: [aWins ? { a: 4, b: 2 } : { a: 2, b: 4 }], winner: aWins ? "A" : "B" }); });
+    const rrChamp = CompFacts.awards(RRC).find(a => a.key === "champion");
+    eq("level after every tiebreaker: the place is shared (co-champions)", [rrChamp && rrChamp.who.length, rrChamp && CompFacts.awardLabel(RRC, rrChamp)], [3, "Co-champions"]);
+    FC.status = "finished"; CompFacts.freeze(FC);
+    const frozen = JSON.stringify(FC.awards);
+    FC.matches.find(x => x.status === "done").sets = [{ a: 0, b: 4 }];
+    eq("finishing freezes the awards", JSON.stringify(CompFacts.awardsFor(FC)), frozen);
+    CompFacts.unfreeze(FC); FC.status = "live";
+    ok("reopening unfreezes them", !FC.awards);
+    // CMXC1 codes
+    const ccode = CompShare.encode(TF4);
+    ok("export code starts with CMXC1:", ccode.indexOf("CMXC1:") === 0);
+    const back = CompShare.decode("Here you go: " + ccode + " thanks!"), sig = (c) => { const d = CompStandings.derive(c), st = c.stages[0];
+      return JSON.stringify([c.id, c.name, c.players.map(p => p.name), c.matches.map(x => [x.status, x.sets, x.winner]), d.table(st.id, st.groups[0].id).map(r => [d.entryLabel(r.id), r.points, r.matchDiff])]); };
+    eq("code round trip keeps the whole competition (same id, players, results and table)", sig(back), sig(TF4));
+    ok("ids inside the code are short and consistent", back.matches.every(x => /^~/.test(x.id) && back.meetings.some(m => m.id === x.meetingId)));
+    const again = CompShare.decode(CompShare.encode(Object.assign(back, { matches: back.matches.concat([Object.assign({}, back.matches[0], { id: uid() })]) })));
+    ok("re-exporting an imported competition never reuses a short id", new Set(again.matches.map(x => x.id)).size === again.matches.length);
+    ok("social codes still decode, and aren't taken for competitions", _cmxDecode(_cmxEncode({ app: "CourtMixer", type: "session", players: [] }, "CMXS1:")).type === "session" && CompShare.decode(_cmxEncode({ app: "CourtMixer", type: "session" }, "CMXS1:")) === null);
+    const nBefore = CompStore.list().length;
+    CompShare.place(CompShare.decode(ccode));
+    const imported = CompStore.getActive();
+    eq("import adds the competition and opens it", [CompStore.list().length, imported.id], [nBefore + 1, TF4.id]);
+    CompShare.place(CompShare.decode(ccode));
+    const dlg = document.querySelector("#cmxModal");
+    ok("same id again: Replace or Import as a copy is asked", !!dlg && /Import as a copy/.test(dlg.textContent));
+    const asCopy = [].slice.call(dlg.querySelectorAll("button")).find(b => /Import as a copy/.test(b.textContent));
+    asCopy.click();
+    ok("import as a copy gets a new id", CompStore.list().length === nBefore + 2 && CompStore.getActive().id !== TF4.id);
+    // viewer and image
+    const vhtml = CompShare.buildViewer(TF4);
+    ok("viewer has no JavaScript at all", !/<script/i.test(vhtml) && !/\son[a-z]+\s*=/i.test(vhtml) && !/javascript:/i.test(vhtml));
+    ok("viewer: every team, player and tab is there", TF4.teams.every(tm => vhtml.indexOf(esc(tm.name)) !== -1) && ["v-st", "v-res", "v-aw", "v-x"].every(id => vhtml.indexOf('id="' + id + '"') !== -1) &&
+      (vhtml.match(/class="dm dm-/g) || []).length === TF4.teams.length + TF4.players.filter(p => p.teamId).length);
+    const pv = CompShare.buildViewer(FC);
+    eq("pairs viewer: one card per pair", (pv.match(/class="dm dm-/g) || []).length, FC.entries.length);
+    const XS = dynComp(3, { type: "roundRobin" });
+    XS.entries[0].label = "<img src=x onerror=alert(1)>"; playAll(XS, 3);
+    ok("names are escaped in the viewer", CompShare.buildViewer(XS).indexOf("<img src=x") === -1);
+    const cv = CompShare.drawImage(FC, null);
+    ok("share image draws (and stays inside phone canvas limits)", cv.width >= 520 && cv.height > 300 && cv.width * cv.height <= 16800000);
 
     out.push("use recommended, then generate");
     const ur = CompModel.newCompetition({ name: "Rec" });

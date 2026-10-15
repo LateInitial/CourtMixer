@@ -156,7 +156,7 @@ const Wizard = (function () {
       let h = optionList("startFrom", [
         { value: "preset", label: t("start.preset"), desc: t("start.preset.desc"), recommended: true },
         { value: "duplicate", label: t("start.duplicate"), desc: others.length ? t("start.duplicate.desc") : t("start.duplicate.none"), disabled: !others.length },
-        { value: "import", label: t("start.import"), desc: t("start.import.later"), disabled: true }
+        { value: "import", label: t("start.import"), desc: t("start.import.desc") }
       ], src);
       if (src === "duplicate" && others.length) {
         h += '<div class="wiz-sub">' + esc(t("start.pickSource")) + "</div>" + optionList("dupSource", others.map(e => ({
@@ -322,7 +322,15 @@ const Wizard = (function () {
   }
 
   function pick(group, value) {
-    if (group === "startFrom") { comp.settings.startFrom = value; rerender(); }
+    if (group === "startFrom" && value === "import") {
+      // the imported competition opens instead; this draft goes if nothing was entered yet
+      const draft = comp;
+      CompShare.showImport(function () {
+        if (!draft.players.length && !draft.entries.length && CompStore.getActiveId() !== draft.id) CompStore.remove(draft.id);
+        CompShell.render();
+      });
+    }
+    else if (group === "startFrom") { comp.settings.startFrom = value; rerender(); }
     else if (group === "preset") { if (value !== comp.settings.preset) change("start", () => CompModel.applyPreset(comp, value)); }
     else if (group === "dupSource") {
       const src = CompStore.load(value);

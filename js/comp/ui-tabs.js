@@ -135,8 +135,12 @@ const CompUI = (function () {
       if (CompStandings.isKO(st)) views.push({ value: st.id + ":ko", label: t(st.type === "plate" ? "standings.plate" : "standings.knockout"), st });
       else st.groups.forEach(g => views.push({ value: st.id + ":" + g.id, label: st.type === "groups" ? t("standings.group", { g: g.name }) : t("standings.table"), st, g }));
     });
+    // Awards and fun facts (§13): first once the competition is finished, last while it runs
+    const aw = { value: "awards", label: t("award.title") };
+    if (comp.status === "finished") views.unshift(aw); else views.push(aw);
     if (!views.some(v => v.value === ui.group)) ui.group = views.length ? views[0].value : null;
     if (views.length > 1) h += chips("stGroup", views, ui.group);
+    if (ui.group === "awards") { root.innerHTML = h + CompFacts.awardsHtml(comp, D) + CompFacts.allFactsHtml(comp, D); return; }
     const v = views.find(x => x.value === ui.group);
     if (!v) { root.innerHTML = h + '<div class="card muted">' + esc(t("standings.none")) + "</div>"; return; }
     h += v.g ? tableHtml(comp, D, v.st, v.g) : bracketHtml(comp, D, v.st);
