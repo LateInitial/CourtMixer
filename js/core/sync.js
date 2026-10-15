@@ -17,6 +17,7 @@ const Sync = (function () {
   const timers = {}, lastPush = {}, inflight = {}, listeners = [];
   const conflicts = [];
   let conflictOpen = false, openKey = null;
+  const deferred = {};   // conflicts left undecided: no uploads for them until the next pull asks again
 
   /* ===== Codes ===== */
   function normalise(raw) { return String(raw || "").toUpperCase().replace(/[\s-]/g, "").replace(/O/g, "0").replace(/[IL]/g, "1"); }
@@ -109,7 +110,7 @@ const Sync = (function () {
   function changed(k) {
     const m = Docs.meta(k);
     if (!m.dirty) return false;
-    if (m.deleted || !m.hash) return true;
+    if (m.deleted || !m.hash || !m.serverVersion) return true;   // a fingerprint only counts against a known cloud copy
     const doc = getLocal(k);
     if (doc && fp(doc) === m.hash) { Docs.setMeta(k, { dirty: false }); return false; }
     return true;
@@ -121,9 +122,14 @@ const Sync = (function () {
   function applyLocal(k, doc) {
     applying = true;
     try {
-      if (k === "social") return Docs.put("social", doc);
+      if (k === "social") {
+        const ok = Docs.put("social", doc);
+        if (ok && typeof _undo !== "undefined") _undo = null;   // an undo would bring back the old copy
+        return ok;
+      }
       if (!doc || doc.id !== k.slice(5) || (typeof CompShare !== "undefined" && CompShare.safe && !CompShare.safe(doc))) return false;
       CompStore.putSynced(CompModel.migrate(doc));
+      if (typeof CompShell !== "undefined" && CompShell.syncedFromCloud) CompShell.syncedFromCloud(doc.id);
       return true;
     } finally { applying = false; }
   }
@@ -143,9 +149,9 @@ const Sync = (function () {
     Docs.setMeta(docKey, { dirty: true, deleted: false, updatedAt: Date.now(), localVersion: m.localVersion + 1 });
     schedule(docKey);
   }
-  function markDeleted(docKey, serverVersion) {
+  function markDeleted(docKey, serverVersion, localVersion) {
     if (applying || !isOn() || !Docs.valid(docKey)) return;
-    Docs.setMeta(docKey, { dirty: true, deleted: true, updatedAt: Date.now(), serverVersion: Number(serverVersion) || 0 });
+    Docs.setMeta(docKey, { dirty: true, deleted: true, updatedAt: Date.now(), serverVersion: Number(serverVersion) || 0, localVersion: (Number(localVersion) || 0) + 1 });
     schedule(docKey);
   }
   // 4 s after the last change, and at most one push per document every 10 s.
@@ -157,7 +163,7 @@ const Sync = (function () {
   }
 
   function push(k) {
-    if (!isOn() || inflight[k]) return Promise.resolve();
+    if (!isOn() || inflight[k] || deferred[k]) return Promise.resolve();
     if (!changed(k)) return Promise.resolve();
     const m = Docs.meta(k);
     lastPush[k] = Date.now();
@@ -165,8 +171,10 @@ const Sync = (function () {
     const done = () => { inflight[k] = false; };
     if (m.deleted) {
       if (!m.serverVersion) { Docs.dropMeta(k); done(); return Promise.resolve(); }
-      return request("DELETE", docPath(k)).then(function (r) {
+      // deleted only if nobody changed it since this device last saw it; otherwise ask
+      return request("DELETE", docPath(k) + "?baseVersion=" + m.serverVersion).then(function (r) {
         done();
+        if (r.status === 409 && r.body) return queueConflict(k, r.body, "deletedHere");
         if (handleStatus(r)) return;
         Docs.dropMeta(k); synced();
       }, function () { done(); retryLater(); });
@@ -181,8 +189,9 @@ const Sync = (function () {
       if (r.status === 200 && r.body) {
         const now = Docs.meta(k);
         // changed again while this was on its way: stays dirty and goes again
-        Docs.setMeta(k, { serverVersion: r.body.version, dirty: now.localVersion !== m.localVersion, hash: fp(doc) });
-        if (now.localVersion !== m.localVersion) schedule(k);
+        const again = now.localVersion !== m.localVersion || now.deleted;   // changed or deleted while on its way
+        Docs.setMeta(k, { serverVersion: r.body.version, dirty: again, hash: fp(doc) });
+        if (again) schedule(k);
         synced();
         return;
       }
@@ -198,6 +207,8 @@ const Sync = (function () {
     if (!isOn()) { setState("off"); return Promise.resolve(); }
     if (pulling) return pulling;
     clearTimeout(retryTimer);
+    if (typeof CompStore !== "undefined") CompStore.flush();   // edits still waiting to be written count as changes
+    Object.keys(deferred).forEach(k => { delete deferred[k]; });  // undecided conflicts are asked again
     setState("syncing");
     pulling = request("GET", "/docs").then(function (r) {
       if (handleStatus(r)) return;
@@ -210,16 +221,17 @@ const Sync = (function () {
       const hadCloud = Object.keys(metaAll).some(k => (Number(metaAll[k].serverVersion) || 0) > 0);
       if (!r.body.length && hadCloud) { cloudGone(); return; }
       Object.keys(server).forEach(function (k) {
+        if (inflight[k]) return;   // our own upload is on its way: its answer settles it
         const s = server[k], exists = k === "social" || local.indexOf(k) !== -1;
         const dirty = changed(k), m = Docs.meta(k);
         if (s.version <= m.serverVersion) return;
         if (m.deleted && m.dirty) { jobs.push(fetchDoc(k).then(cloud => cloud && queueConflict(k, { version: s.version, updatedAt: s.updatedAt, data: cloud.data }, "deletedHere"))); return; }
-        if (!dirty || !exists) jobs.push(fetchDoc(k).then(cloud => cloud && takeCloud(k, cloud)));
+        if (!dirty || !exists) { const lv = m.localVersion; jobs.push(fetchDoc(k).then(cloud => cloud && takeCloud(k, cloud, lv))); }
         else jobs.push(fetchDoc(k).then(cloud => cloud && conflict(k, cloud)));
       });
       local.forEach(function (k) {
         const m = Docs.meta(k);
-        if (server[k]) return;
+        if (server[k] || inflight[k]) return;
         if (m.serverVersion > 0 && !m.dirty && k !== "social") { removeLocal(k); refreshUI(); toast(t("sync.deletedElsewhere")); return; }
         if (!m.serverVersion && !m.dirty) Docs.setMeta(k, { dirty: true });   // made while sync was off
       });
@@ -233,11 +245,23 @@ const Sync = (function () {
   function fetchDoc(k) {
     return request("GET", docPath(k)).then(r => r.status === 200 && r.body && typeof r.body.data === "string" ? r.body : null, () => null);
   }
-  function takeCloud(k, cloud) {
+  // lv: this device's change counter when the download started; an edit made since then is not
+  // overwritten but becomes a conflict.
+  function takeCloud(k, cloud, lv) {
+    if (typeof CompStore !== "undefined") CompStore.flush();
+    if (lv !== undefined && (Docs.meta(k).localVersion !== lv || changed(k))) return conflict(k, cloud);
+    if (k === "social" && socialBusy()) { setTimeout(pull, 15000); return; }   // later: don't wipe scores being typed
     const doc = unpack(cloud.data);
     if (!doc || !applyLocal(k, doc)) return;
     Docs.setMeta(k, { serverVersion: cloud.version, dirty: false, deleted: false, hash: fp(getLocal(k)) });
     refreshUI();
+  }
+  // Social mode has unsaved input on screen: a picked score, an edited result, a player being edited.
+  function socialBusy() {
+    if (typeof document === "undefined") return false;
+    if (typeof editingId !== "undefined" && editingId) return true;
+    if (document.querySelector(".history-item.dirty")) return true;
+    return Array.prototype.some.call(document.querySelectorAll("input.pair-score, .score-entry input.score-pick"), el => el.value !== "");
   }
   function cloudGone() {
     turnOff(true);
@@ -249,7 +273,7 @@ const Sync = (function () {
     // an identical copy is no conflict at all
     if (cloud.data) {
       const doc = unpack(cloud.data), mine = getLocal(k);
-      if (doc && mine && sameContent(doc, mine)) { Docs.setMeta(k, { serverVersion: cloud.version, dirty: false, hash: fp(mine) }); return; }
+      if (doc && mine && sameContent(doc, mine)) { Docs.setMeta(k, { serverVersion: cloud.version, dirty: false, hash: fp(mine) }); if (state === "syncing") synced(); return; }
     }
     queueConflict(k, cloud, cloud.data ? "both" : "deletedCloud");
   }
@@ -271,7 +295,7 @@ const Sync = (function () {
     conflictOpen = true; openKey = k;
     const mine = getLocal(k), cloudDoc = c.cloud.data ? unpack(c.cloud.data) : null, meta = Docs.meta(k);
     const name = k === "social" ? t("sync.socialName") : ((mine || cloudDoc || {}).name || t("comp.untitled"));
-    const when = (ms) => ms ? new Date(ms).toLocaleString() : "?";
+    const when = (ms) => ms ? new Date(ms).toLocaleString() : t("sync.notSynced");
     const lines = c.kind === "deletedCloud" ? [t("sync.conflict.deletedCloud", { name })]
       : c.kind === "deletedHere" ? [t("sync.conflict.deletedHere", { name })]
       : [t("sync.conflict.text", { name }), t("sync.conflict.mine", { when: when(meta.updatedAt), what: describe(k, mine, cloudDoc) }), t("sync.conflict.cloud", { when: when(c.cloud.updatedAt), what: describe(k, cloudDoc, mine) })];
@@ -296,7 +320,7 @@ const Sync = (function () {
     cmxShowModal({ title: t("sync.conflict.title"), bodyHTML: lines.map(l => '<p class="cmx-modal-text">' + esc(l) + "</p>").join(""), buttons,
       onOpen: function (box) {
         // closed without choosing: decide later (it comes back at the next sync)
-        const later = function () { cmxCloseModal(); conflictOpen = false; openKey = null; setTimeout(nextConflict, 0); };
+        const later = function () { cmxCloseModal(); deferred[k] = true; conflictOpen = false; openKey = null; setTimeout(nextConflict, 0); };
         const x = box.querySelector(".cmx-modal-x"), o = document.getElementById("cmxModal");
         if (x) x.onclick = later;
         if (o) o.onclick = function (e) { if (e.target === o) later(); };
@@ -308,7 +332,7 @@ const Sync = (function () {
   function turnOn() {
     const c = generate();
     Store.setJSON(CFG_KEY, { code: c, on: true });
-    localKeys().forEach(k => Docs.setMeta(k, { serverVersion: 0, dirty: true, deleted: false }));
+    localKeys().forEach(k => Docs.setMeta(k, { serverVersion: 0, dirty: true, deleted: false, hash: "" }));
     failures = 0; startPolling(); pull();
     return c;
   }
@@ -319,7 +343,7 @@ const Sync = (function () {
     if (!valid(c)) return false;
     Store.setJSON(CFG_KEY, { code: c, on: true });
     const emptySocial = typeof players !== "undefined" && !players.length && !(matchHistory || []).length;
-    localKeys().forEach(k => Docs.setMeta(k, { serverVersion: 0, dirty: !(k === "social" && emptySocial), deleted: false }));
+    localKeys().forEach(k => Docs.setMeta(k, { serverVersion: 0, dirty: !(k === "social" && emptySocial), deleted: false, hash: "" }));
     failures = 0; startPolling(); pull();
     return true;
   }
@@ -328,7 +352,7 @@ const Sync = (function () {
     Store.remove(CFG_KEY);
     Object.keys(timers).forEach(k => clearTimeout(timers[k]));
     clearTimeout(retryTimer); clearInterval(pollTimer); pollTimer = null;
-    Object.keys(Docs.allMeta()).forEach(k => Docs.setMeta(k, { serverVersion: 0, deleted: false }));
+    Object.keys(Docs.allMeta()).forEach(k => Docs.setMeta(k, { serverVersion: 0, deleted: false, hash: "" }));
     setState("off");
     if (!quiet) toast(t("sync.turnedOff"));
   }

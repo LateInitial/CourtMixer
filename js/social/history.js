@@ -115,7 +115,7 @@ ${hasScore ? `<div class="hist-scored">
 ${endedNoScore ? `<span class="tag warn">Ended · no score</span>` : ""}
 ${drawBadge}
 ${h.court ? `<span class="tag hist-court-tag">Court ${h.court}</span>` : ""}
-<span class="hist-time">${h.time}</span>
+<span class="hist-time">${esc(h.time)}</span>
 </div>
 <button class="hist-del-btn" data-hid="${h.id}" title="Delete this match">Del</button>
 </div>

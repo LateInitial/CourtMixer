@@ -14,3 +14,6 @@ package-lock.json
 *.md
 /*.png
 .dev.vars
+.env
+.env.*
+.dev.vars*

@@ -105,9 +105,13 @@ function cmxImportText(kind){
 
 // A backup can be hand-edited or come from an older build; a malformed match entry used to
 // throw inside renderHistory and leave the app looking bricked. Normalise, then drop the rest.
+// Ids go into HTML attributes, and imported data (codes, cloud sync, transfer links) can come from
+// someone else: anything that isn't a plain token gets a fresh id.
+function plainId(v) { return (typeof v === "number" && Number.isFinite(v)) || (typeof v === "string" && /^[A-Za-z0-9._:-]{1,80}$/.test(v)); }
+function safeId(v) { return plainId(v) ? v : uid(); }
 function normalizeHistoryEntry(h) {
 if (!h || typeof h !== "object") return null;
-const ids = (v) => Array.isArray(v) ? v.filter(x => typeof x === "string") : [];
+const ids = (v) => Array.isArray(v) ? v.filter(x => typeof x === "string" && plainId(x)) : [];
 const names = (v) => Array.isArray(v) ? v.map(x => String(x == null ? "" : x)) : [];
 const aIds = ids(h.pairAIds), bIds = ids(h.pairBIds);
 if (aIds.length !== 2 || bIds.length !== 2) return null;
@@ -119,8 +123,8 @@ const aN = names(h.pairA), bN = names(h.pairB);
 const court = (Number(h.court) >= 1 && Number(h.court) <= MAX_COURTS) ? Number(h.court) : null;
 const cat = (h.category === "MD" || h.category === "WD" || h.category === "XD") ? h.category : null;
 return {
-id: (typeof h.id === "string" && h.id) ? h.id : uid(),
-time: String(h.time == null ? "" : h.time),
+id: safeId(h.id),
+time: String(h.time == null ? "" : h.time).slice(0, 40),
 pairA: aN.length === 2 ? aN : ["?", "?"],
 pairB: bN.length === 2 ? bN : ["?", "?"],
 pairAIds: aIds, pairBIds: bIds,
@@ -144,7 +148,7 @@ showToast("Backup imported.", true);
 }
 
 function doApplyBackup(data) {
-players = data.players.map(p => ({ id: p.id || uid(), name: String(p.name || ""), gender: p.gender === "F" ? "F" : "M", skill: normSkillData(p.skill), matches: Number(p.matches) || 0, wins: Number(p.wins) || 0, points: Number(p.points) || 0, priority: false, skip: false, priorityLock: false, skipLock: false, pointsDiff: Number(p.pointsDiff) || 0 }));
+players = data.players.map(p => ({ id: safeId(p.id), name: String(p.name || ""), gender: p.gender === "F" ? "F" : "M", skill: normSkillData(p.skill), matches: Number(p.matches) || 0, wins: Number(p.wins) || 0, points: Number(p.points) || 0, priority: false, skip: false, priorityLock: false, skipLock: false, pointsDiff: Number(p.pointsDiff) || 0 }));
 // v1.6.0-v1.7.0 wrote the array under "matchHistory"; accept both so those backups still load.
 const rawHist = Array.isArray(data.history) ? data.history : (Array.isArray(data.matchHistory) ? data.matchHistory : []);
 matchHistory = rawHist.map(normalizeHistoryEntry).filter(Boolean);

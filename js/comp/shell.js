@@ -366,6 +366,18 @@ const CompShell = (function () {
     render();
   }
 
-  return { init, render, renderBand, setMode, startNew, open, generate, snapshot, toastUndo, statusLine, settle, _undoStack: undoStack,
+  // A newer copy came from another device: undo snapshots and an open settings screen hold the old
+  // one, and putting it back would wipe the other device's changes everywhere.
+  function syncedFromCloud(id) {
+    for (let i = undoStack.length - 1; i >= 0; i--) if (undoStack[i].doc && undoStack[i].doc.id === id) undoStack.splice(i, 1);
+    const active = CompStore.getActiveId();
+    if (settingsOpen && active === id) {
+      settingsOpen = null; settingsCancel = null;
+      if (typeof cmxCloseModal === "function") cmxCloseModal();
+      showToast(esc(t("sync.updatedElsewhere")));
+    }
+  }
+
+  return { init, render, renderBand, setMode, startNew, open, generate, snapshot, toastUndo, statusLine, settle, syncedFromCloud, _undoStack: undoStack,
     setTab: function (x) { tab = x; } };
 })();

@@ -90,14 +90,14 @@ const CompStore = (function () {
   }
 
   function remove(id) {
-    const synced = Docs.valid("comp:" + id) ? Docs.meta("comp:" + id).serverVersion : 0;   // before Docs.remove drops it
+    const before = Docs.valid("comp:" + id) ? Docs.meta("comp:" + id) : { serverVersion: 0, localVersion: 0 };   // before Docs.remove drops it
     delete pending[id]; delete cache[id];
     index = loadIndex().filter(e => e.id !== id);
     // Docs.remove also drops the document's sync metadata.
     if (Docs.valid("comp:" + id)) Docs.remove("comp:" + id); else Store.remove(PREFIX + id);
     if (!Store.setJSON(INDEX_KEY, index)) warnBlocked();
     if (getActiveId() === id) setActive(null);
-    if (typeof Sync !== "undefined" && Sync.markDeleted) Sync.markDeleted("comp:" + id, synced); // the cloud copy goes too
+    if (typeof Sync !== "undefined" && Sync.markDeleted) Sync.markDeleted("comp:" + id, before.serverVersion, before.localVersion); // the cloud copy goes too
   }
 
   // A copy that arrived from cloud sync (Phase 7). The document in memory is updated in place, so a

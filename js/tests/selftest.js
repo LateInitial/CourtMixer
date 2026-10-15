@@ -248,6 +248,13 @@ function runSelfTests(){
       const changed = Object.keys(Object.assign({}, before, after)).filter(k => before[k] !== after[k]);
       eq("stored social keys unchanged after round-trip", changed, []);
       ok("Docs.put('social') rejects junk", Docs.put("social", { app: "Other" }) === false);
+      // imported or synced social data can come from someone else: markup never reaches the page
+      const X = '<img src=x onerror="window.__cmxPwn=1">', hostile = JSON.parse(JSON.stringify(doc));
+      hostile.players[0].id = "p1" + X; hostile.history[0].id = "m1" + X; hostile.history[1].time = X;
+      hostile.local.courtSlots = { 1: ["p1" + X, "nobody", null, "p4"] }; hostile.local.courtMode = { 1: X };
+      Docs.put("social", hostile);
+      ok("hostile ids are replaced or dropped, times escaped, slots and modes checked", players.every(pl => /^[\w.:-]+$/.test(String(pl.id))) && matchHistory.every(h => /^[\w.:-]+$/.test(String(h.id))) &&
+        courtSlots[1].every(x => x === null || players.some(pl => pl.id === x)) && courtMode[1] === "" && !window.__cmxPwn);
     } finally {
       Store._useBackend(_realBackend);
       players = keep.players; matchHistory = keep.matchHistory;

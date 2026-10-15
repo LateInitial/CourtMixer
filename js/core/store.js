@@ -91,7 +91,8 @@ const Docs = (function () {
     try { doApplyBackup(data); } finally { cmxAlert = _alert; }
     const loc = data.local;
     if (loc && typeof loc === "object") {
-      const slot = (x) => (typeof x === "string" && x) ? x : null;
+      // a slot must name a player who exists (a synced copy can come from another device)
+      const slot = (x) => (typeof x === "string" && x && players.some(p => p.id === x)) ? x : null;
       const flag = (x) => x === true;
       courtSlots = EMPTY_SLOTS(); courtSlotManual = EMPTY_MANUAL();
       for (let c = 1; c <= MAX_COURTS; c++) {
@@ -100,7 +101,8 @@ const Docs = (function () {
         if (Array.isArray(r2) && r2.length === 4) courtSlotManual[c] = r2.map(flag);
       }
       const cm = loc.courtMode;
-      courtMode = (cm && typeof cm === "object") ? { 1: cm[1] || "", 2: cm[2] || "", 3: cm[3] || "", 4: cm[4] || "" } : { 1: "", 2: "", 3: "", 4: "" };
+      const mode = (x) => (x === "MD" || x === "WD" || x === "XD" || x === "MIX") ? x : "";
+      courtMode = (cm && typeof cm === "object") ? { 1: mode(cm[1]), 2: mode(cm[2]), 3: mode(cm[3]), 4: mode(cm[4]) } : { 1: "", 2: "", 3: "", 4: "" };
       const f = (loc.flags && typeof loc.flags === "object") ? loc.flags : {};
       players.forEach(function (p) {
         const v = f[p.id];

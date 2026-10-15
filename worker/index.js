@@ -87,8 +87,14 @@ async function api(request, env, url) {
     return json({ docKey, version: r.version, updatedAt: r.updated_at, data: r.data });
   }
   if (method === "DELETE") {
-    await env.DB.prepare("DELETE FROM docs WHERE account_id = ?1 AND doc_key = ?2").bind(acct, docKey).run();
-    return json({ ok: true });
+    // ?baseVersion=n: delete only the version the device last saw; a newer one comes back as 409
+    const bv = url.searchParams.get("baseVersion");
+    if (bv === null || !/^\d{1,9}$/.test(bv)) return json({ error: "bad_request" }, 400);
+    const res = await env.DB.prepare("DELETE FROM docs WHERE account_id = ?1 AND doc_key = ?2 AND version = ?3").bind(acct, docKey, Number(bv)).run();
+    if (res.meta && res.meta.changes === 1) return json({ ok: true });
+    const cur = await env.DB.prepare("SELECT version, updated_at, data FROM docs WHERE account_id = ?1 AND doc_key = ?2").bind(acct, docKey).first();
+    if (!cur) return json({ ok: true });   // already gone
+    return json({ error: "conflict", version: cur.version, updatedAt: cur.updated_at, data: cur.data }, 409);
   }
   if (method !== "PUT") return json({ error: "method_not_allowed" }, 405);
 
@@ -103,18 +109,22 @@ async function api(request, env, url) {
   const size = new TextEncoder().encode(body.data).length;
   if (size > MAX_DOC) return json({ error: "too_large" }, 413);
 
+  // the day's write is counted first, in one statement, so parallel requests can't pass the cap
   const day = today();
-  const used = await env.DB.prepare("SELECT writes FROM usage WHERE account_id = ?1 AND day = ?2").bind(acct, day).first();
-  if (used && used.writes >= MAX_WRITES_PER_DAY) return json({ error: "daily_limit" }, 429);
+  const counted = await env.DB.prepare("INSERT INTO usage (account_id, day, writes) VALUES (?1, ?2, 1) ON CONFLICT (account_id, day) DO UPDATE SET writes = writes + 1 WHERE writes < ?3")
+    .bind(acct, day, MAX_WRITES_PER_DAY).run();
+  if (!counted.meta || counted.meta.changes !== 1) return json({ error: "daily_limit" }, 429);
 
   const now = Date.now();
   let res;
   if (body.baseVersion === 0) {
-    const count = await env.DB.prepare("SELECT COUNT(*) AS n FROM docs WHERE account_id = ?1").bind(acct).first();
-    const exists = await env.DB.prepare("SELECT 1 AS x FROM docs WHERE account_id = ?1 AND doc_key = ?2").bind(acct, docKey).first();
-    if (!exists && count && count.n >= MAX_DOCS) return json({ error: "too_many_docs" }, 413);
-    res = await env.DB.prepare("INSERT INTO docs (account_id, doc_key, data, version, updated_at, size) VALUES (?1, ?2, ?3, 1, ?4, ?5) ON CONFLICT (account_id, doc_key) DO NOTHING")
-      .bind(acct, docKey, body.data, now, size).run();
+    // created only while the account is under its document cap (one statement, so parallel creates can't pass it)
+    res = await env.DB.prepare("INSERT INTO docs (account_id, doc_key, data, version, updated_at, size) SELECT ?1, ?2, ?3, 1, ?4, ?5 WHERE (SELECT COUNT(*) FROM docs WHERE account_id = ?1) < ?6 ON CONFLICT (account_id, doc_key) DO NOTHING")
+      .bind(acct, docKey, body.data, now, size, MAX_DOCS).run();
+    if (!res.meta || res.meta.changes !== 1) {
+      const exists = await env.DB.prepare("SELECT 1 AS x FROM docs WHERE account_id = ?1 AND doc_key = ?2").bind(acct, docKey).first();
+      if (!exists) return json({ error: "too_many_docs" }, 413);
+    }
   } else {
     res = await env.DB.prepare("UPDATE docs SET data = ?1, version = version + 1, updated_at = ?2, size = ?3 WHERE account_id = ?4 AND doc_key = ?5 AND version = ?6")
       .bind(body.data, now, size, acct, docKey, body.baseVersion).run();
@@ -125,7 +135,6 @@ async function api(request, env, url) {
     if (!cur) return json({ error: "conflict", version: 0, updatedAt: 0, data: null }, 409);
     return json({ error: "conflict", version: cur.version, updatedAt: cur.updated_at, data: cur.data }, 409);
   }
-  await env.DB.prepare("INSERT INTO usage (account_id, day, writes) VALUES (?1, ?2, 1) ON CONFLICT (account_id, day) DO UPDATE SET writes = writes + 1").bind(acct, day).run();
   const row = await env.DB.prepare("SELECT version, updated_at FROM docs WHERE account_id = ?1 AND doc_key = ?2").bind(acct, docKey).first();
   return json({ version: row.version, updatedAt: row.updated_at });
 }
