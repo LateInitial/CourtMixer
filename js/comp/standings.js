@@ -182,6 +182,8 @@ const CompStandings = (function () {
       }
       if (o.kind === "walkover") {
         const t2 = CompFormat.tally(f, CompFormat.walkoverSets(f));
+        // points league (D-055): a walkover is worth what a round off is, half the full score
+        if (stage && stage.type === "pointsLeague") { t2.gamesA = leagueRest(f); t2.gamesB = 0; }
         return o.winner === "A" ? Object.assign(t2, { counted: true }) : { setsA: t2.setsB, setsB: t2.setsA, gamesA: t2.gamesB, gamesB: t2.gamesA, counted: true };
       }
       return Object.assign(CompFormat.tally(f, o.match.sets, o.match.outcome), { counted: true, retired: o.match.outcome === "retired" });
@@ -213,9 +215,11 @@ const CompStandings = (function () {
       const st = stageById[meeting.stageId], f = formatFor(st);
       row.byes = (row.byes || 0) + 1;
       // Points league (D-055): a round off is a rest, not a win; it earns half a walkover's points,
-      // so sitting out costs about what an average match would have earned.
-      if (st && st.type === "pointsLeague") { row.gamesFor += Math.ceil(CompFormat.tally(f, CompFormat.walkoverSets(f)).gamesA / 2); return; }
+      // so sitting out costs about what an average match would have earned (nothing with "win only").
+      if (st && st.type === "pointsLeague") { if (comp.settings.walkoverScore !== "winOnly") row.gamesFor += leagueRest(f); return; }
       row.played++; row.won++;
+      // a bye is a walkover win, so it scores like one when ranking by score
+      if (!isTeams) { const n = CompFormat.needed(f); row.scorePoints += Number((comp.settings.standings.pairs.pointsByScore || {})[n + "-0"]) || 0; }
       if (isTeams) {
         const n = (comp.settings.meetingTemplate || []).filter(r => !r.isDecider).length;
         if (comp.settings.standings.teams.resultMode === "tally") row.teamPoints += n;
@@ -225,8 +229,8 @@ const CompStandings = (function () {
       if (comp.settings.walkoverScore === "winOnly") return;
       const tl = CompFormat.tally(f, CompFormat.walkoverSets(f)), k = isTeams ? (comp.settings.meetingTemplate || []).filter(r => !r.isDecider).length : 1;
       row.setsFor += k * tl.setsA; row.gamesFor += k * tl.gamesA;
-      if (!isTeams) { const n = CompFormat.needed(f); row.scorePoints += Number((comp.settings.standings.pairs.pointsByScore || {})[n + "-0"]) || 0; }
     }
+    function leagueRest(f) { return Math.ceil(CompFormat.tally(f, CompFormat.walkoverSets(f)).gamesA / 2); }
 
     function addResult(row, meeting, asSide) {
       const o0 = outcome(meeting), st0 = stageById[meeting.stageId];

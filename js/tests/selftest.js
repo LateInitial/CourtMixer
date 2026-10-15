@@ -716,7 +716,7 @@ function runSelfTests(){
       for (let i = 0; i < 2000; i++) {
         const D = CompStandings.derive(c), x = CompSchedule.readyList(D)[0];
         if (!x) return D;
-        const w = pick(i, x), sc = c.settings.matchFormats.main.kind === "totalPoints" ? (w === "A" ? { a: 13, b: 8 } : { a: 8, b: 13 }) : (w === "A" ? { a: 4, b: 1 } : { a: 1, b: 4 });
+        const w = pick(i, x), sc = c.settings.matchFormats.main.setType === "totalPoints" ? (w === "A" ? { a: 13, b: 8 } : { a: 8, b: 13 }) : (w === "A" ? { a: 4, b: 1 } : { a: 1, b: 4 });
         CompResults.apply(c, x.id, { sets: [sc], winner: w });
         CompGenerate.advance(c);
       }
@@ -799,6 +799,46 @@ function runSelfTests(){
       c.meetings.filter(m => m.stageId === plate.id).forEach(m => ["A", "B"].forEach(w => { const id = D.side(m, w); if (id && id !== "BYE" && inPlate.indexOf(id) === -1) inPlate.push(id); }));
       eq("knockout + plate, " + n + " entries: the plate is everyone who lost their first match (byes included)", [inPlate.sort().join(), c.meetings.every(m => D.outcome(m).done)], [firstLost.join(), true]);
     });
+    out.push("phase 5 review fixes");
+    const LL = dynComp(7, { type: "pointsLeague", rounds: 12, pairing: "mexicano" }, true), LLD = playOut(LL, (i) => (i % 4 ? "A" : "B"));
+    const offs = {};
+    LL.meetings.forEach(m => { const a = LLD.side(m, "A"), b = LLD.side(m, "B"); if (a === "BYE" || b === "BYE") { const id = a === "BYE" ? b : a; offs[id] = (offs[id] || 0) + 1; } });
+    const offN = LL.entries.map(e => offs[e.id] || 0);
+    ok("long points league: rounds off are shared out (12 rounds, 7 pairs: 1 or 2 each)", Math.max.apply(null, offN) - Math.min.apply(null, offN) <= 1);
+    [5, 6, 7, 8].forEach(n => {
+      const c = dynComp(n, { type: "swiss", rounds: n - 1 }), D = playOut(c, (i) => ((i * 5 + n) % 7) < 4 ? "A" : "B");
+      eq("swiss " + n + " entries over " + (n - 1) + " rounds: still no rematches", dynCheck(c, D).rematches, 0);
+    });
+    const SD = CompModel.newCompetition({ name: "SD" });
+    CompModel.applyPreset(SD, "pairsRoundRobin"); SD.sport = "padel"; CompModel.setDivisionCount(SD, 2);
+    SD.divisions.forEach((d, di) => { for (let i = 0; i < (di ? 4 : 10); i++) Wizard.pairsUtil.addPair(SD, d.id, [d.name + i + "a", d.name + i + "b"], ["M", "M"]); });
+    SD.settings.stagePlan = { all: { type: "swiss", rounds: 6 } };
+    const sdDraw = CompGenerate.generateDraw(SD);
+    eq("swiss rounds are capped per division (4 pairs: 3 rounds)", sdDraw.stages.map(st => st.config.rounds), [6, 3]);
+    const PP = CompModel.newCompetition({ name: "PP" });
+    CompModel.applyPreset(PP, "pairsPoints"); PP.sport = "padel";
+    PP.settings.matchFormats = {};
+    Wizard.useRecommended(PP);
+    eq("points league preset plays first to 21 total points", (PP.settings.matchFormats.main || {}).setType, "totalPoints");
+    const GQ = dynComp(12, { type: "groups", groupSize: 4, advance: 2, thirdPlace: true, plate: true });
+    const gqD = CompStandings.derive(GQ), gqPlate = GQ.stages.find(st => st.type === "plate");
+    ok("groups + plate: no first-round plate match between two pairs of the same group", GQ.meetings.filter(m => m.stageId === gqPlate.id && m.round === 1).every(m => {
+      const a = m.sideA.source, b = m.sideB.source;
+      return !(a && b && a.kind === "groupRank" && b.kind === "groupRank" && a.groupId === b.groupId);
+    }) && gqD);
+    const BS = dynComp(9, { type: "swiss", rounds: 1 });
+    BS.settings.matchFormats = { main: CompFormat.fromPreset("bad3x21") }; BS.settings.standings.pairs.rankBy = "score"; BS.settings.walkoverScore = "winOnly";
+    const BSD = CompStandings.derive(BS), bsM = BS.meetings.find(m => BSD.side(m, "B") === "BYE" || BSD.side(m, "A") === "BYE");
+    const bsRow = BSD.table(BS.stages[0].id, BS.stages[0].groups[0].id).find(x => x.id === (BSD.side(bsM, "A") === "BYE" ? BSD.side(bsM, "B") : BSD.side(bsM, "A")));
+    eq("a Swiss bye scores like a 2-0 walkover when ranking by score", bsRow.points, BS.settings.standings.pairs.pointsByScore["2-0"]);
+    const AW = dynComp(8, { type: "pointsLeague", rounds: 6, pairing: "americano" }, true);
+    for (let i = 0; i < 6; i++) { // round 1 and two matches of round 2
+      const x = CompSchedule.readyList(CompStandings.derive(AW))[0];
+      CompResults.apply(AW, x.id, { sets: [{ a: 13, b: 8 }], winner: "A" }); CompGenerate.advance(AW);
+    }
+    AW.entries[3].withdrawn = true; AW.entries[3].withdrawMode = "walkover"; CompGenerate.advance(AW);
+    const awD = playOut(AW, () => "A"), awR = dynCheck(AW, awD);
+    eq("americano after a withdrawal: no repeated opponents", [awR.rematches, AW.meetings.every(m => awD.outcome(m).done)], [0, true]);
     const GP = dynComp(10, { type: "groups", groupSize: 4, advance: 2, thirdPlace: true, plate: true });
     const GPD = playOut(GP, (i) => (i % 3 ? "A" : "B"));
     const gpPlate = GP.stages.find(s => s.type === "plate");

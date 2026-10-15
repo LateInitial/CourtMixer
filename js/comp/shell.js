@@ -37,7 +37,7 @@ const CompShell = (function () {
   // before the change.
   function settle(comp, before, label) {
     const stale = CompStandings.staleMatches(comp);
-    if (!stale.length) { CompStore.save(comp); render(); return; }
+    if (!stale.length) { CompGenerate.advance(comp); CompStore.save(comp); render(); return; } // e.g. a new tie order redraws an untouched round
     const D = CompStandings.derive(comp);
     const list = stale.map(x => "\u2022 " + D.matchLabel(x, false)).join("\n");
     cmxConfirm({ title: t("results.cascade.title"), yes: t("results.cascade.yes"), danger: true, message: t("settings.cascade", { list: list }),

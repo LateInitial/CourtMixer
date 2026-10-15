@@ -213,6 +213,26 @@
     if (comp.kind === "teams") return comp.teams.filter(x => !x.withdrawn).length;
     return comp.entries.filter(e => !e.withdrawn && e.divisionId && (divId === "all" || !divId || e.divisionId === divId)).length;
   }
+  // The plans in use: one shared plan, or one per division.
+  function plansOf(comp) {
+    const sp = comp.settings.stagePlan || {};
+    return comp.settings.formatPlan === "perDivision" ? comp.divisions.map(d => sp[d.id] || sp.all) : [sp.all];
+  }
+  function allLeague(comp) { const ps = plansOf(comp); return ps.length > 0 && ps.every(x => x && x.type === "pointsLeague"); }
+  // Points league plays "first to 21 total points" by default (§9.8) — only when every division is a
+  // points league, since all divisions share one score format; back to the sport's format otherwise.
+  function syncLeagueFormat(comp) {
+    if (comp.wizard.visited.scoring) return;
+    const fs = comp.settings.matchFormats = comp.settings.matchFormats || {};
+    if (allLeague(comp)) { if (!fs.main || fs.main.setType !== "totalPoints") fs.main = CompFormat.finalize(JSON.parse(JSON.stringify(CompFormat.TOTAL_POINTS))); }
+    else if (fs.main && fs.main.setType === "totalPoints") delete fs.main;
+  }
+  // Rounds are planned per division; a shared plan is limited by the smallest division.
+  function roundsBase(comp, divId) {
+    if (comp.kind === "teams" || (divId && divId !== "all") || comp.divisions.length < 2) return entrantCount(comp, divId);
+    const counts = comp.divisions.map(d => entrantCount(comp, d.id)).filter(n => n > 0);
+    return counts.length ? Math.min.apply(null, counts) : 0;
+  }
   function planKey(comp) { return comp.settings.formatPlan === "perDivision" && ui.formatDiv ? ui.formatDiv : "all"; }
   function currentPlan(comp) {
     const sp = comp.settings.stagePlan, k = planKey(comp);
@@ -248,8 +268,8 @@
   function matchRange(comp, draw) {
     const per = {};
     draw.meetings.forEach(m => [m.sideA.id, m.sideB.id].forEach(id => { if (id) per[id] = (per[id] || 0) + 1; }));
-    const dyn = draw.stages.find(s => s.type === "swiss" || s.type === "pointsLeague");
-    if (dyn) return { min: dyn.config.rounds, max: dyn.config.rounds }; // everyone plays (or sits out) every round
+    // Swiss / points league: everyone plays (or sits out) every planned round, not just the drawn one
+    draw.stages.filter(s => s.type === "swiss" || s.type === "pointsLeague").forEach(s => s.groups.forEach(g => g.entryIds.forEach(id => { per[id] = s.config.rounds; })));
     const koRounds = draw.stages.filter(s => s.type === "knockout").map(s => Math.log2(s.config.size || 2));
     const direct = draw.stages.some(s => s.type === "knockout" && s.order === 0);
     const counts = entrantIds(comp).map(id => per[id] || 0);
@@ -281,6 +301,7 @@
       const type = preset && !unavailable(comp, preset) ? preset : (rec || "groups");
       comp.settings.formatPlan = "sameForAll";
       comp.settings.stagePlan = { all: CompModel.stagePlanFor(type) };
+      syncLeagueFormat(comp);
     },
     validate: function (comp) {
       const plans = comp.settings.formatPlan === "perDivision" ? comp.divisions.map(d => comp.settings.stagePlan[d.id] || comp.settings.stagePlan.all) : [comp.settings.stagePlan.all];
@@ -320,10 +341,10 @@
       if ((plan.type === "plate" || (plan.type === "groups" && plan.plate)) && est[plan.type] && !est[plan.type].draw.stages.some(st => st.type === "plate")) {
         h += '<div class="wiz-warn">' + esc(t("format.plateNone")) + "</div>";
       }
-      const n = entrantCount(comp, divId);
+      const n = roundsBase(comp, divId);
       if (plan.type === "swiss" || plan.type === "pointsLeague") {
-        const def = CompGenerate.defaultRounds(plan.type, n), rounds = plan.rounds || def;
-        const max = plan.type === "swiss" ? Math.max(1, Math.min(9, n - 1)) : 30;
+        const def = CompGenerate.defaultRounds(plan.type, n);
+        const max = plan.type === "swiss" ? Math.max(1, Math.min(9, n - 1)) : 30, rounds = Math.min(plan.rounds || def, max);
         h += '<div class="wiz-row"><span class="wiz-label">' + esc(t("format.rounds")) + "</span>" + U.stepper("rounds", rounds, 1, max) + "</div>" +
           '<div class="muted">' + esc(t(plan.type === "swiss" ? "format.rounds.swiss" : "format.rounds.league", { n: def })) + "</div>";
         if (plan.type === "swiss") h += '<div class="wiz-label">' + esc(t("format.firstRound")) + "</div>" +
@@ -343,26 +364,22 @@
         if (unavailable(comp, value) || value === plan.type) return;
         U.change("format", () => {
           put(CompModel.stagePlanFor(value));
-          // points league plays "first to 21 total points" by default (§9.8); back to the sport's format otherwise
-          if (!comp.wizard.visited.scoring) {
-            const fs = comp.settings.matchFormats = comp.settings.matchFormats || {};
-            if (value === "pointsLeague") fs.main = CompFormat.finalize(JSON.parse(JSON.stringify(CompFormat.TOTAL_POINTS)));
-            else if (fs.main && fs.main.setType === "totalPoints") delete fs.main;
-          }
+          syncLeagueFormat(comp);
         });
       }
       else if (act === "pick" && group === "groupPlate") { plan.plate = value === "yes"; put(plan); U.rerender(); }
       else if (act === "pick" && group === "firstRound") { plan.firstRound = value; put(plan); U.rerender(); }
       else if (act === "pick" && group === "pairing") { plan.pairing = value; put(plan); U.rerender(); }
       else if (act === "rounds") {
-        const def = CompGenerate.defaultRounds(plan.type, entrantCount(comp, k));
-        plan.rounds = Math.max(1, Math.min(plan.type === "swiss" ? Math.max(1, Math.min(9, entrantCount(comp, k) - 1)) : 30, (plan.rounds || def) + Number(el.dataset.delta)));
+        const nb = roundsBase(comp, k), def = CompGenerate.defaultRounds(plan.type, nb);
+        plan.rounds = Math.max(1, Math.min(plan.type === "swiss" ? Math.max(1, Math.min(9, nb - 1)) : 30, (plan.rounds || def) + Number(el.dataset.delta)));
         put(plan); U.rerender();
       }
       else if (act === "pick" && group === "formatPlan") {
         U.change("format", () => {
           comp.settings.formatPlan = value;
           if (value === "perDivision") comp.divisions.forEach(d => { if (!comp.settings.stagePlan[d.id]) comp.settings.stagePlan[d.id] = JSON.parse(JSON.stringify(comp.settings.stagePlan.all)); });
+          syncLeagueFormat(comp);
         });
       }
       else if (act === "pick" && group === "seeding") { plan.seeding = value; put(plan); U.rerender(); }
@@ -385,7 +402,7 @@
   /* ===== Step 10: Match scoring ===== */
   function ensureFormat(comp, slot) {
     const fs = comp.settings.matchFormats = comp.settings.matchFormats || {};
-    if (!fs[slot]) fs[slot] = CompFormat.finalize(JSON.parse(JSON.stringify(CompFormat.recommendedFor(comp.sport || "other"))));
+    if (!fs[slot]) fs[slot] = CompFormat.finalize(JSON.parse(JSON.stringify(slot === "main" && allLeague(comp) ? CompFormat.TOTAL_POINTS : CompFormat.recommendedFor(comp.sport || "other"))));
     return fs[slot];
   }
   function hasKnockout(comp) {
@@ -440,7 +457,7 @@
   }
 
   Wizard.register("scoring", {
-    recommend: function (comp) { ensureFormat(comp, "main"); },
+    recommend: function (comp) { syncLeagueFormat(comp); ensureFormat(comp, "main"); },
     validate: function (comp) {
       const f = (comp.settings.matchFormats || {}).main;
       if (!f || !(f.target > 0)) return ["wiz.err.scoring"];

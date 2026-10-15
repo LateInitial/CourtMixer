@@ -237,7 +237,18 @@ const CompGenerate = (function () {
         for (let r = advance + 1; r <= most; r++) st.groups.forEach((g, gi) => { if (g.entryIds.length >= r) seeds.push({ group: gi, rank: r }); });
         if (seeds.length >= 2) {
           const size = nextPow2(seeds.length);
-          const first = bracketPositions(size).map(s => s <= seeds.length ? fromSource({ kind: "groupRank", groupId: st.groups[seeds[s - 1].group].id, rank: seeds[s - 1].rank }) : fromSource({ kind: "bye" }));
+          const slots = bracketPositions(size).map(s => s <= seeds.length ? seeds[s - 1] : null);
+          // pairs from the same group already met: swap second sides with another first-round pair
+          const clash = (a, b) => a && b && a.group === b.group;
+          for (let k = 0; k < size / 2; k++) {
+            if (!clash(slots[2 * k], slots[2 * k + 1])) continue;
+            for (let j = 0; j < size / 2; j++) {
+              if (j === k || !slots[2 * j + 1] || clash(slots[2 * k], slots[2 * j + 1]) || clash(slots[2 * j], slots[2 * k + 1])) continue;
+              const x = slots[2 * k + 1]; slots[2 * k + 1] = slots[2 * j + 1]; slots[2 * j + 1] = x;
+              break;
+            }
+          }
+          const first = slots.map(s => s ? fromSource({ kind: "groupRank", groupId: st.groups[s.group].id, rank: s.rank }) : fromSource({ kind: "bye" }));
           const pl = newStage(division.id, "plate", 2, { thirdPlace: false, fromStageId: st.id }, fids.ko);
           koMeetings(pl, first, false).forEach(m => meetings.push(m));
           stages.push(pl);
@@ -273,7 +284,8 @@ const CompGenerate = (function () {
     } else if (plan.type === "swiss" || plan.type === "pointsLeague") {
       // Rounds are drawn one at a time (advance()); only round 1 exists at the start.
       const n = entries.length;
-      const rounds = plan.rounds || defaultRounds(plan.type, n);
+      // Swiss never plays more rounds than there are opponents (a plan shared by divisions can ask for more)
+      const rounds = plan.type === "swiss" ? Math.max(1, Math.min(n - 1, plan.rounds || defaultRounds(plan.type, n))) : plan.rounds || defaultRounds(plan.type, n);
       const st = newStage(division.id, plan.type, 0, { manualOrder: {}, rounds: rounds, pairing: plan.pairing || "mexicano",
         firstRound: plan.firstRound || "seed", seedKey: baseKey }, plan.type === "pointsLeague" ? fids.main : fids.main);
       const ordered = seedOrder(entries, rngFor(comp, baseKey + ":" + plan.type)).map(e => e.id);
@@ -316,29 +328,75 @@ const CompGenerate = (function () {
     return out;
   }
   // Next round from the current standings. order: entry ids best first; played: "a|b" keys;
-  // hadBye: ids that already sat out. Swiss pairs top-down avoiding rematches (with backtracking);
-  // Mexicano pairs 1v2, 3v4 avoiding last round's opponent.
-  function pairRound(type, order, played, hadBye, lastOpp) {
-    const ids = order.slice(), byes = [];
-    if (ids.length % 2) {
-      let k = ids.length - 1;
-      while (k > 0 && hadBye[ids[k]]) k--;
-      byes.push(ids.splice(k, 1)[0]);
+  // byeCount: rounds off so far; lastOpp: last round's opponents. Pairs top-down (nearest-ranked
+  // opponent first) with the fewest rematches possible: Swiss and a broken Americano rotation avoid
+  // every earlier opponent, Mexicano only last round's; last round's opponent comes last of all.
+  function pairRound(type, order, played, byeCount, lastOpp, roundsLeft) {
+    const key = (a, b) => a < b ? a + "|" + b : b + "|" + a;
+    const big = order.length + 1;
+    const cost = (a, b) => lastOpp[a] === b ? big : (type !== "pointsLeague" && played[key(a, b)] ? 1 : 0);
+    // Look-ahead (Swiss, broken Americano): only accept a round if the rounds still to come can be
+    // paired without rematches too. Odd numbers get a "sit out" node that nobody meets twice.
+    // A step limit keeps it quick; past the limit the round is accepted as it is.
+    const SIT = "\u0000sit", everyone = order.concat(order.length % 2 ? [SIT] : []);
+    let ahead = type === "pointsLeague" ? 0 : 150000;
+    const baseMet = {};
+    Object.keys(played).forEach(k => { baseMet[k] = true; });
+    order.forEach(id => { if (byeCount[id]) baseMet[key(id, SIT)] = true; });
+    function futureOk(met, left) {
+      if (left <= 0 || ahead <= 0) return true;
+      const nodes = everyone.slice();
+      function match(rest, added) {
+        if (ahead-- <= 0) return true;
+        if (!rest.length) return futureOk(Object.assign({}, met, added), left - 1);
+        const a = rest[0];
+        for (let j = 1; j < rest.length; j++) {
+          const k2 = key(a, rest[j]);
+          if (met[k2]) continue;
+          added[k2] = true;
+          if (match(rest.slice(1, j).concat(rest.slice(j + 1)), added)) return true;
+          delete added[k2];
+        }
+        return false;
+      }
+      return match(nodes, {});
     }
-    // Swiss: never a previous opponent. Mexicano: never last round's opponent (others are fine).
-    const met = type === "pointsLeague" ? (a, b) => lastOpp[a] === b : (a, b) => played[a < b ? a + "|" + b : b + "|" + a];
-    // Top-down with backtracking: each entry takes the nearest-ranked opponent still allowed.
-    function solve(rest, allowRematch) {
-      if (!rest.length) return [];
+    function acceptable(pairs) {
+      if (!roundsLeft || ahead <= 0) return true;
+      const met = Object.assign({}, baseMet);
+      pairs.forEach(p => { met[key(p[0], p[1])] = true; });
+      byes.forEach(id => { met[key(id, SIT)] = true; });
+      return futureOk(met, roundsLeft);
+    }
+    let steps = 0;
+    function solve(rest, budget, chosen) {
+      if (!rest.length) return budget === 0 && chosen && !acceptable(chosen) ? null : [];
+      if (++steps > 20000) return null; // give up on this budget and allow one more rematch
       const a = rest[0];
       for (let j = 1; j < rest.length; j++) {
-        if (!allowRematch && met(a, rest[j])) continue;
-        const sub = solve(rest.slice(1, j).concat(rest.slice(j + 1)), allowRematch);
+        const c = cost(a, rest[j]);
+        if (c > budget) continue;
+        const pick = chosen.concat([[a, rest[j]]]);
+        const sub = solve(rest.slice(1, j).concat(rest.slice(j + 1)), budget - c, pick);
         if (sub) return [[a, rest[j]]].concat(sub);
       }
       return null;
     }
-    const pairs = solve(ids, false) || solve(ids, true);
+    // Who sits out (odd numbers): among those with the fewest rounds off, the lowest-ranked one whose
+    // round can be paired without a rematch; if none can, the lowest-ranked one.
+    let ids = order.slice(), byes = [], pairs = null;
+    if (order.length % 2) {
+      const fewest = Math.min.apply(null, order.map(id => byeCount[id] || 0));
+      const cands = order.filter(id => (byeCount[id] || 0) === fewest).reverse();
+      for (const c of cands.slice(0, 4)) {
+        ids = order.filter(id => id !== c); byes = [c]; steps = 0;
+        pairs = solve(ids, 0, []);
+        if (pairs) break;
+      }
+      if (!pairs) { ids = order.filter(id => id !== cands[0]); byes = [cands[0]]; }
+    }
+    for (let budget = 0; !pairs && budget <= big * ids.length; budget = budget < ids.length ? budget + 1 : budget + big) { steps = 0; pairs = solve(ids, budget, []); }
+    if (!pairs) { pairs = []; for (let k = 0; k + 1 < ids.length; k += 2) pairs.push([ids[k], ids[k + 1]]); }
     return { pairs, byes };
   }
 
@@ -356,23 +414,28 @@ const CompGenerate = (function () {
         const untouched = lastMs.every(m => !comp.matches.some(x => x.meetingId === m.id && x.status !== "pending") && !m.resultOverride);
         const prevDone = ms.filter(m => m.round === last - 1).every(m => D.outcome(m).done);
         let round;
-        if (last > 1 && untouched && prevDone && guard === 0) round = last;               // redraw an untouched round
+        if (last >= 1 && untouched && prevDone && guard === 0) round = last;              // redraw an untouched round
         else if (last < st.config.rounds && lastMs.every(m => D.outcome(m).done)) round = last + 1;
         else break;
         const division = D.divisionById[st.divisionId] || { id: st.divisionId, category: "open" };
-        const active = D.table(st.id, g.id).map(r => r.id).filter(id => { const e = D.entryById[id] || D.teamById[id]; return e && !e.withdrawn; });
+        const isActive = (id) => { const e = D.entryById[id] || D.teamById[id]; return e && !e.withdrawn; };
+        const active = D.table(st.id, g.id).map(r => r.id).filter(isActive);
+        if (active.length < 2) break; // nobody left to pair
+        const seeded = g.entryIds.filter(isActive), full = seeded.length === g.entryIds.length;
         let fresh;
-        if (st.type === "pointsLeague" && st.config.pairing === "americano") fresh = americanoRound(st, g, g.entryIds.filter(id => active.indexOf(id) !== -1), round);
+        if (round === 1) fresh = firstRound(comp, st, g, seeded);                          // a withdrawal before play: same seeding, without them
+        else if (st.type === "pointsLeague" && st.config.pairing === "americano" && full) fresh = americanoRound(st, g, seeded, round);
         else {
-          const played = {}, hadBye = {}, lastOpp = {};
+          const played = {}, byeCount = {}, lastOpp = {};
           ms.filter(m => m.round < round).forEach(function (m) {
             const a = D.side(m, "A"), b = D.side(m, "B");
-            if (a === "BYE" || b === "BYE") { hadBye[a === "BYE" ? b : a] = true; return; }
+            if (a === "BYE" || b === "BYE") { const id = a === "BYE" ? b : a; byeCount[id] = (byeCount[id] || 0) + 1; return; }
             if (!a || !b) return;
             played[a < b ? a + "|" + b : b + "|" + a] = true;
             if (m.round === round - 1) { lastOpp[a] = b; lastOpp[b] = a; }
           });
-          const r = pairRound(st.type, active, played, hadBye, lastOpp);
+          // after a withdrawal the Americano rotation no longer fits: pair to avoid earlier opponents instead
+          const r = pairRound(st.type === "pointsLeague" && st.config.pairing === "americano" ? "americano" : st.type, active, played, byeCount, lastOpp, st.config.rounds - round);
           fresh = r.pairs.map((p, k) => newMeeting(st.id, g.id, round, k, side(p[0]), side(p[1])))
             .concat(r.byes.map((id, k) => byeMeeting(st, g, round, r.pairs.length + k, id)));
         }
