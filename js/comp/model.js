@@ -174,8 +174,9 @@ const CompModel = (function () {
       const removed = comp.teams.slice(n).map(t => t.id);
       comp.teams = comp.teams.slice(0, n);
       const gone = (id) => removed.indexOf(id) !== -1;
-      comp.players.forEach(p => { if (gone(p.teamId)) p.teamId = null; });
-      comp.entries.forEach(e => { if (gone(e.teamId)) e.teamId = null; });
+      // kept, and listed on Players and pairs as "without a team" until moved or removed
+      comp.players.forEach(p => { if (gone(p.teamId)) { p.teamId = null; p.noTeam = true; } });
+      comp.entries = comp.entries.filter(e => !gone(e.teamId)); // their pairs are rebuilt once they join a team
     }
   }
 

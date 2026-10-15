@@ -562,7 +562,7 @@
       const name = U.stepName;
       let h = "";
       const blk = Wizard.blockers(comp), bad = Wizard.invalidSteps(comp), later = Wizard.unbuilt(comp);
-      if (blk.length) h += '<div class="wiz-warn">' + esc(t("review.needsReview", { steps: blk.map(name).join(", ") })) + "</div>";
+      if (blk.length) h += '<div class="wiz-warn">' + esc(t("review.needsReview.lead")) + " " + blk.map(id => '<button type="button" class="wiz-link" data-act="jump" data-step="' + id + '">' + esc(name(id)) + "</button>").join(" ") + "</div>";
       if (bad.length) h += '<div class="wiz-errors">' + bad.map(id => '<div><button type="button" class="wiz-link" data-act="jump" data-step="' + id + '">' + esc(name(id)) + "</button> — " +
         esc(Wizard.validate(comp, id).map(k => t(k)).join(" ")) + "</div>").join("") + "</div>";
       h += reviewCard("basics", name("basics"), [comp.name || t("comp.untitled"), comp.dateISO, comp.sport ? t("sport." + comp.sport) : "—"]);

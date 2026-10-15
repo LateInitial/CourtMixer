@@ -104,6 +104,12 @@
       h += slots.map(e => '<div class="wiz-item"><span class="wiz-pair-n wide">' + esc(e.label) + "</span>" + [0, 1].map(i =>
         '<select class="wiz-select" data-field="tmSlot" data-id="' + esc(e.id) + '" data-i="' + i + '" aria-label="' + esc(e.label) + '">' +
         regs.map(p => '<option value="' + esc(p.id) + '"' + (e.playerIds[i] === p.id ? " selected" : "") + ">" + esc(p.name) + "</option>").join("") + "</select>").join("") + "</div>").join("");
+      const homeless = comp.players.filter(p => p.noTeam && !p.teamId);
+      if (homeless.length) {
+        h += '<div class="wiz-warn"><b>' + esc(t("teamEntries.noTeam", { n: homeless.length })) + "</b>" + homeless.map(p =>
+          '<div class="wiz-item"><span class="wiz-pair-name">' + esc(p.name) + '</span><select class="wiz-select" data-field="tmMoveTeam" data-id="' + esc(p.id) + '"><option value="">' + esc(t("entries.moveTo")) + "</option>" +
+          comp.teams.map(x => '<option value="' + esc(x.id) + '">' + esc(x.name) + "</option>").join("") + '</select><button type="button" class="wiz-icon" data-act="tmRemove" data-id="' + esc(p.id) + '" aria-label="' + esc(t("entries.remove")) + '">\u2715</button></div>').join("") + "</div>";
+      }
       const w = teamWarnings(comp, tm).concat(unusedSlots(comp).length ? [t("teamEntries.templateOld")] : []);
       if (w.length) h += '<div class="wiz-warn">' + w.map(x => "<div>" + esc(x) + "</div>").join("") + "</div>";
       flagTemplate(comp);
@@ -163,6 +169,11 @@
       return false;
     },
     change: function (comp, f, el) {
+      if (f === "tmMoveTeam") {
+        const p = comp.players.find(x => x.id === el.dataset.id);
+        if (p && el.value) { p.teamId = el.value; delete p.noTeam; CompLineups.syncTeamEntries(comp); U.rerender(); }
+        return;
+      }
       if (f !== "tmSlot") return;
       // Picking a player who's in another pair swaps the two of them.
       const e = comp.entries.find(x => x.id === el.dataset.id), i = Number(el.dataset.i), pid = el.value;
@@ -242,10 +253,13 @@
       const r = comp.settings.meetingTemplate[Number(el.dataset.idx)];
       if (!r) return;
       if (f === "rbDiv") {
+        const oldDiv = comp.divisions.find(x => x.id === r.divisionId);
+        const autoName = !r.isDecider && oldDiv && r.slot && r.label === CompLineups.slotLabel(oldDiv, r.slot);
         r.divisionId = el.value;
         const d = comp.divisions.find(x => x.id === el.value);
         if (d) r.category = d.category;
         if (!r.isDecider) r.slot = Math.max.apply(null, [0].concat(comp.settings.meetingTemplate.filter(x => x !== r && x.divisionId === r.divisionId && x.slot).map(x => x.slot))) + 1;
+        if (autoName && d) r.label = CompLineups.slotLabel(d, r.slot);
       } else if (f === "rbCat") r.category = el.value;
       else return;
       U.rerender();
@@ -330,7 +344,7 @@
       const name = U.stepName, card = P.reviewCard;
       let h = "";
       const blk = Wizard.blockers(comp), bad = Wizard.invalidSteps(comp);
-      if (blk.length) h += '<div class="wiz-warn">' + esc(t("review.needsReview", { steps: blk.map(name).join(", ") })) + "</div>";
+      if (blk.length) h += '<div class="wiz-warn">' + esc(t("review.needsReview.lead")) + " " + blk.map(id => '<button type="button" class="wiz-link" data-act="jump" data-step="' + id + '">' + esc(name(id)) + "</button>").join(" ") + "</div>";
       if (bad.length) h += '<div class="wiz-errors">' + bad.map(id => '<div><button type="button" class="wiz-link" data-act="jump" data-step="' + id + '">' + esc(name(id)) + "</button> — " +
         esc(Wizard.validate(comp, id).map(k => t(k)).join(" ")) + "</div>").join("") + "</div>";
       h += card("basics", name("basics"), [comp.name || t("comp.untitled"), comp.dateISO, comp.sport ? t("sport." + comp.sport) : "—"]);

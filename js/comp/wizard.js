@@ -310,7 +310,11 @@ const Wizard = (function () {
     }
     else if (act === "teamCount") {
       const n = comp.teams.length + Number(el.dataset.delta);
-      change("teams", () => CompModel.setTeamCount(comp, n));
+      const last = comp.teams[comp.teams.length - 1], count = last ? comp.players.filter(p => p.teamId === last.id).length : 0;
+      if (n < comp.teams.length && count) {
+        cmxConfirm({ title: t("teams.removeTeam"), yes: t("teams.removeTeam"), danger: true, message: t("teams.removeTeam.q", { team: last.name, n: count }) },
+          function () { change("teams", () => CompModel.setTeamCount(comp, n)); });
+      } else change("teams", () => CompModel.setTeamCount(comp, n));
     }
     else if (act === "teamColor") { comp.teams[Number(el.dataset.idx)].color = el.dataset.value || null; rerender(); }
     else if (act === "pick") pick(el.dataset.group, el.dataset.value);
