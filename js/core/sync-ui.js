@@ -5,7 +5,7 @@
 const SyncUI = (function () {
   "use strict";
   // The Cloudflare address. Set once the new site is live; until then the old site shows no banner.
-  const NEW_SITE = "";
+  const NEW_SITE = "https://courtmixer.late-initial.workers.dev/";
   const OLD_HOST = "lateinitial.github.io";
   const MOVED_KEY = "courtmixer_moved_dismissed";
   const QR_SRC = "js/vendor/qrcode.js";
