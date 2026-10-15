@@ -135,7 +135,7 @@ STR.en = {
   "basics.date": "Date",
   "basics.sport": "Sport",
   "sport.badminton": "Badminton",
-  "sport.badminton.desc": "Games to 21 (or 15), rally scoring.",
+  "sport.badminton.desc": "Games to 21 by default, or 15, 25, 30 or custom \u2014 you choose in Match scoring.",
   "sport.padel": "Padel",
   "sport.padel.desc": "Games and sets, golden point.",
   "sport.tennis": "Tennis",
