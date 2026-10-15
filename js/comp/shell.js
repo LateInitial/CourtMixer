@@ -5,7 +5,8 @@
 
 const CompShell = (function () {
   let tab = "courts";
-  let settingsOpen = null; // step id while a settings screen is shown
+  let settingsOpen = null;   // step id while a settings screen is shown
+  let settingsCancel = null; // restores the competition as it was before that screen opened
 
   /* ===== Undo: last 10 snapshots, in memory only (§10.7) ===== */
   const undoStack = [];
@@ -29,6 +30,26 @@ const CompShell = (function () {
   }
 
   function el(id) { return document.getElementById(id); }
+
+  // After a change that can move pairs around (standings rules, tie order, walkover scoring):
+  // knockout results now attached to the wrong pairs are listed, and cleared only if the
+  // organiser agrees (with Undo); otherwise the change is reverted. `before` is a copy taken
+  // before the change.
+  function settle(comp, before, label) {
+    const stale = CompStandings.staleMatches(comp);
+    if (!stale.length) { CompStore.save(comp); render(); return; }
+    const D = CompStandings.derive(comp);
+    const list = stale.map(x => "\u2022 " + D.meetingLabel(D.meetingById[x.meetingId], false)).join("\n");
+    cmxConfirm({ title: t("results.cascade.title"), yes: t("results.cascade.yes"), danger: true, message: t("settings.cascade", { list: list }),
+      onNo: function () { CompStore.restore(before); render(); } },
+      function () {
+        undoStack.push({ label: label, doc: before, wasActive: true });
+        if (undoStack.length > 10) undoStack.shift();
+        const cleared = CompStandings.clearStale(comp);
+        CompStore.save(comp); render();
+        toastUndo(esc(t("settings.cleared", { n: cleared.length })));
+      });
+  }
 
   /* ===== Status line (§4.1) ===== */
   function statusLine(comp) {
@@ -195,10 +216,17 @@ const CompShell = (function () {
     const comp = CompStore.getActive(), root = el("compRoot");
     const before = JSON.parse(JSON.stringify(comp));
     settingsOpen = step;
+    settingsCancel = function () { settingsOpen = null; settingsCancel = null; CompStore.restore(before); };
     renderTabs(false);
     Wizard.mount(root, comp, { single: step,
-      onDone: function (c) { const r = onDone ? onDone(c) : null; if (!r || !r.length) settingsOpen = null; return r; },
-      onCancel: function () { settingsOpen = null; CompStore.restore(before); render(); } });
+      onDone: function (c) {
+        const r = onDone ? onDone(c) : null;
+        if (r && r.length) return r;
+        settingsOpen = null; settingsCancel = null;
+        setTimeout(function () { settle(c, before, t("menu.settings")); }, 0);
+        return [];
+      },
+      onCancel: function () { if (settingsCancel) settingsCancel(); render(); } });
   }
   function courtsDone(comp) {
     const n = comp.settings.courtsCount;
@@ -222,16 +250,17 @@ const CompShell = (function () {
           else if (inp.dataset.k === "div") { const d = comp.divisions.find(x => x.id === inp.dataset.id); if (d) d.name = v; }
           else { const p = comp.players.find(x => x.id === inp.dataset.id); if (p) p.name = v; }
         });
-        comp.entries.forEach(e => { e.label = e.playerIds.map(id => (comp.players.find(p => p.id === id) || {}).name || "?").join(" / "); });
+        comp.entries.forEach(e => { e.label = Wizard.pairsUtil.labelOf(comp, e); });
         CompStore.save(comp); render();
       } },
       { label: t("wiz.cancel"), cls: "ghost", onClick: function () {} }] });
   }
   function walkoverSetting() {
     const comp = CompStore.getActive();
-    cmxShowModal({ title: t("score.walkover.title"), bodyHTML: "", buttons: [
-      { label: t("score.wo.max") + (comp.settings.walkoverScore === "formatMax" ? " ✓" : ""), cls: "secondary", onClick: function () { comp.settings.walkoverScore = "formatMax"; CompStore.save(comp); render(); } },
-      { label: t("score.wo.win") + (comp.settings.walkoverScore === "winOnly" ? " ✓" : ""), cls: "secondary", onClick: function () { comp.settings.walkoverScore = "winOnly"; CompStore.save(comp); render(); } },
+    const set = (v) => { const before = JSON.parse(JSON.stringify(comp)); comp.settings.walkoverScore = v; settle(comp, before, t("score.walkover.title")); };
+    cmxShowModal({ title: t("score.walkover.title"), bodyHTML: cmxMsgHtml(t("score.wo.what")), buttons: [
+      { label: t("score.wo.max") + (comp.settings.walkoverScore === "formatMax" ? " ✓" : ""), cls: "secondary", onClick: function () { set("formatMax"); } },
+      { label: t("score.wo.win") + (comp.settings.walkoverScore === "winOnly" ? " ✓" : ""), cls: "secondary", onClick: function () { set("winOnly"); } },
       { label: t("wiz.close"), cls: "ghost", onClick: function () {} }] });
   }
   function backToSetup() {
@@ -265,6 +294,7 @@ const CompShell = (function () {
   }
 
   function showMenu() {
+    if (settingsOpen) return cmxAlert(t("settings.finishFirst"));
     const comp = CompStore.getActive();
     const items = [];
     const live = comp && (comp.status === "live" || comp.status === "finished");
@@ -283,8 +313,8 @@ const CompShell = (function () {
   }
 
   function setMode(m) {
+    if (settingsCancel) settingsCancel(); // leaving mid-settings discards that screen's changes
     CompStore.setMode(m);
-    settingsOpen = null;
     render();
     try { window.scrollTo(0, 0); } catch (e) {}
   }
@@ -319,6 +349,6 @@ const CompShell = (function () {
     render();
   }
 
-  return { init, render, renderBand, setMode, startNew, open, generate, snapshot, toastUndo, statusLine, _undoStack: undoStack,
+  return { init, render, renderBand, setMode, startNew, open, generate, snapshot, toastUndo, statusLine, settle, _undoStack: undoStack,
     setTab: function (x) { tab = x; } };
 })();

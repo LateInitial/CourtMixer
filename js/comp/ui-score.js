@@ -52,12 +52,10 @@ const CompResults = (function () {
     const x = comp.matches.find(m => m.id === matchId);
     if (!x || x.status !== "done") return;
     CompShell.snapshot(t("results.delete"), comp);
-    x.history.push({ at: Date.now(), sets: x.sets, winner: x.winner, outcome: x.outcome, cleared: true });
-    x.status = "pending"; x.sets = []; x.winner = null; x.outcome = null; x.endedAt = null; x.startedAt = null; x.courtId = null; x.entryIds = null;
-    x.sideA.playerIds = []; x.sideB.playerIds = [];
+    CompStandings.resetMatch(x);
     const cleared = CompStandings.clearStale(comp);
     CompStore.save(comp);
-    CompShell.toastUndo(esc(t(cleared.length ? "results.cleared" : "results.deleted", { n: cleared.length })));
+    CompShell.toastUndo(esc(t(cleared.length ? "results.deletedCleared" : "results.deleted", { n: cleared.length })));
   }
 
   return { save, clear, apply };
@@ -78,20 +76,28 @@ const CompScore = (function () {
     }
     return el;
   }
+  // The competition as stored now, if it's still the one this sheet was opened on.
+  function live() {
+    const c = CompStore.getActive();
+    return c && state && c.id === state.comp.id && c.matches.some(m => m.id === state.matchId) ? c : null;
+  }
   function close() { const el = document.getElementById("compSheet"); if (el) el.style.display = "none"; state = null; }
 
-  function open(comp, matchId) {
+  // opts.mode: open straight in "walkover" or "retired" mode (from a court card).
+  function open(comp, matchId, opts) {
     const x = comp.matches.find(m => m.id === matchId);
     if (!x) return;
     const sets = (x.sets || []).map(s => Object.assign({}, s));
     state = { comp, matchId, sets: sets.length ? sets : [{ a: null, b: null }], mode: x.outcome === "walkover" ? "walkover" : x.outcome === "retired" ? "retired" : "normal",
       side: null, editing: x.status === "done" };
     if (state.mode !== "normal") state.side = x.winner === "A" ? "B" : "A"; // the side that gave up
+    if (opts && opts.mode && opts.mode !== state.mode) { state.mode = opts.mode; state.side = null; }
     sheet().style.display = "flex";
     render();
   }
 
   function ctx() {
+    if (live()) state.comp = live();
     const D = CompStandings.derive(state.comp), x = state.comp.matches.find(m => m.id === state.matchId);
     const m = D.meetingById[x.meetingId], f = D.formatFor(D.stageById[m.stageId]);
     return { D, x, m, f };
@@ -129,7 +135,8 @@ const CompScore = (function () {
       return { winner: state.side === "A" ? "B" : "A", errors: ev.errors, warnings: ev.warnings };
     }
     const ev = CompFormat.evaluateScore(f, sets);
-    if (ev.winner === "draw" && f.setType !== "totalPoints") ev.errors.push(t("score.noDraw"));
+    const ko = (ctx().D.stageById[ctx().m.stageId] || {}).type === "knockout";
+    if (ev.winner === "draw" && (f.setType !== "totalPoints" || ko)) { ev.errors.push(t(ko ? "score.noDrawKo" : "score.noDraw")); ev.winner = null; }
     return ev;
   }
 
@@ -182,6 +189,7 @@ const CompScore = (function () {
     let grid = "";
     for (let n = 0; n <= max; n++) grid += '<button type="button" class="sp-n' + (cur === n ? " sel" : "") + '" data-v="' + n + '">' + n + "</button>";
     grid += '<button type="button" class="sp-n sp-custom" data-v="custom">' + esc(t("score.custom")) + "</button>";
+    if (Number.isInteger(cur)) grid += '<button type="button" class="sp-n sp-custom" data-v="clear">' + esc(t("score.clear")) + "</button>";
     cmxShowModal({ title: t("score.pick"), bodyHTML: '<div class="sp-team">' + esc(D.sideLabel(m, key === "a" ? "A" : "B")) + '</div><div class="sp-grid">' + grid + "</div>" +
       '<input type="number" inputmode="numeric" min="0" class="wiz-input wiz-num comp-custom-score" style="display:none" aria-label="' + esc(t("score.custom")) + '">',
       buttons: [{ label: t("wiz.close"), cls: "ghost", onClick: function () {} }],
@@ -189,6 +197,7 @@ const CompScore = (function () {
         const inp = box.querySelector(".comp-custom-score");
         box.querySelectorAll(".sp-n").forEach(b => { b.onclick = function () {
           if (b.dataset.v === "custom") { inp.style.display = ""; inp.focus(); return; }
+          if (b.dataset.v === "clear") { setScore(i, key, null); cmxCloseModal(); return; }
           setScore(i, key, Number(b.dataset.v)); cmxCloseModal();
         }; });
         inp.onkeydown = function (e) { if (e.key === "Enter") { const v = parseInt(inp.value, 10); if (v >= 0) { setScore(i, key, v); cmxCloseModal(); } } };
@@ -198,11 +207,14 @@ const CompScore = (function () {
   function setScore(i, key, v) {
     while (state.sets.length <= i) state.sets.push({ a: null, b: null });
     state.sets[i][key] = v;
-    // drop rows after a change that decides the match earlier
+    // Once the first games decide the match, later games are dropped (e.g. game 2 corrected so
+    // it's now 2-0): otherwise a stale game 3 would block Save.
     const { f } = ctx();
     for (let j = 1; j < state.sets.length; j++) {
-      const ev = CompFormat.evaluateScore(f, state.sets.slice(0, j).filter(filled), { partial: true });
-      if (ev.winner && state.mode === "normal" && j <= state.sets.length - 1 && !filled(state.sets[j])) state.sets.length = j;
+      const first = state.sets.slice(0, j);
+      if (!first.every(filled)) break;
+      const ev = CompFormat.evaluateScore(f, first, { partial: true });
+      if (ev.winner && ev.winner !== "draw" && !ev.errors.length) { state.sets.length = j; break; }
     }
     render();
   }
@@ -230,13 +242,15 @@ const CompScore = (function () {
     else if (act === "mode") { state.mode = b.dataset.mode; state.side = null; render(); }
     else if (act === "side") { state.side = b.dataset.side; render(); }
     else if (act === "clearResult") {
-      const comp = state.comp, id = state.matchId;
+      const comp = live(), id = state.matchId;
+      if (!comp) { close(); return CompShell.render(); }
       cmxConfirm({ title: t("results.delete"), yes: t("results.delete"), danger: true, message: t("results.deleteConfirm") }, function () { close(); CompResults.clear(comp, id); CompShell.render(); });
     }
     else if (act === "save") {
       const { f } = ctx(), ev = evaluation(f);
       if (ev.errors.length || !ev.winner) return;
-      const comp = state.comp, id = state.matchId;
+      const comp = live(), id = state.matchId;
+      if (!comp) { close(); return CompShell.render(); }
       const result = { sets: state.mode === "walkover" ? [] : cleanSets(f), outcome: state.mode, winner: ev.winner };
       CompResults.save(comp, id, result, function () { close(); CompShell.render(); });
     }

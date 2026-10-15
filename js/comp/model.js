@@ -3,9 +3,24 @@
 // Spec §5. Nothing here touches storage or the DOM.
 
 const CompModel = (function () {
-  const SCHEMA_VERSION = 1;
+  const SCHEMA_VERSION = 2;
   // Ordered list: MIGRATIONS[n] upgrades a document from schemaVersion n to n + 1.
-  const MIGRATIONS = {};
+  const MIGRATIONS = {
+    // v1.10.0 drafts: older standings shape, no court assignment / time budget / knockout format.
+    1: function (doc) {
+      const s = doc.settings = doc.settings || {}, d = defaultSettings();
+      const sp = s.standings = s.standings || {};
+      const p = sp.pairs = sp.pairs || {};
+      if (!p.league) p.league = { win: Number(p.pointsWin) > 1 ? Number(p.pointsWin) : 3, loss: Number(p.pointsLoss) || 0 };
+      if (!p.pointsByScore) p.pointsByScore = d.standings.pairs.pointsByScore;
+      if (["wins", "league", "score"].indexOf(p.rankBy) === -1) p.rankBy = "wins";
+      if (!Array.isArray(p.tiebreakers)) p.tiebreakers = d.standings.pairs.tiebreakers;
+      delete p.pointsWin; delete p.pointsLoss;
+      if (!sp.teams) sp.teams = d.standings.teams;
+      ["courtAssign", "timeAvailable", "koFormat"].forEach(k => { if (s[k] === undefined) s[k] = d[k]; });
+      delete s.changeoverMinutes; delete s.minutesPerMatch;
+    }
+  };
 
   const SPORTS = ["badminton", "padel", "tennis", "other"];
   const CATEGORIES = ["open", "MD", "WD", "XD"];
@@ -50,7 +65,7 @@ const CompModel = (function () {
     return {
       preset: null, divisionNaming: "letters",
       courtsCount: 2, courtNames: ["Court 1", "Court 2"], courtMode: "shared",
-      minutesPerMatch: null, changeoverMinutes: 0, startTime: null, restRule: "prefer", minRestMatches: 1,
+      startTime: null, restRule: "prefer", minRestMatches: 1,
       formatPlan: "sameForAll",
       stagePlan: { all: { type: "groups", groupSize: 4, advance: 2, thirdPlace: true, seeding: "snake" } },
       matchFormats: {},
@@ -85,8 +100,16 @@ const CompModel = (function () {
   }
 
   // Duplicate: keeps settings and players, clears results and the draw (§6.2 step 1).
+  // Withdrawals and substitutions belonged to that event, so everyone starts fresh: withdrawn
+  // pairs are back in, and one-match stand-ins and replaced players are dropped.
   function duplicate(src) {
     const c = JSON.parse(JSON.stringify(src));
+    c.entries.forEach(e => { e.withdrawn = false; delete e.withdrawMode; });
+    const inEntry = {};
+    c.entries.forEach(e => e.playerIds.forEach(id => { inEntry[id] = true; }));
+    c.players = c.players.filter(p => inEntry[p.id] || !(p.replacedBy || p.subFor || p.role === "reserve"));
+    c.players.forEach(p => { p.withdrawn = false; delete p.replacedBy; delete p.subFor; });
+    c.divisions.forEach(d => { delete d.drawSeq; });
     const now = Date.now();
     c.id = uid(); c.status = "setup"; c.createdAt = now; c.updatedAt = now; c.dateISO = todayISO();
     c.name = (src.name || "") + " (copy)";

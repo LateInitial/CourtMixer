@@ -3,9 +3,10 @@
 // greedy time estimate used on Review.
 
 const CompSchedule = (function () {
+  // Queue order: stage, then round; the 3rd-place match goes just before the final.
   function stageOrder(D, match) {
     const m = D.meetingById[match.meetingId], st = m && D.stageById[m.stageId];
-    return (st ? st.order : 0) * 1000 + (m ? m.round : 0);
+    return (st ? st.order : 0) * 1000 + (m ? m.round - (m.thirdPlace ? 0.5 : 0) : 0);
   }
 
   function busyPlayers(D) {
@@ -42,28 +43,42 @@ const CompSchedule = (function () {
     };
   }
 
-  function readyList(D, divisionFilter) {
-    const busy = busyPlayers(D);
+  function readyList(D, divisionFilter, busy) {
+    busy = busy || busyPlayers(D);
     const order = {};
     D.comp.matches.forEach((x, i) => { order[x.id] = i; });
     return D.comp.matches.filter(x => isReady(D, x, busy) && (!divisionFilter || x.divisionId === divisionFilter))
       .sort((a, b) => stageOrder(D, a) - stageOrder(D, b) || order[a.id] - order[b.id]);
   }
 
+  // Work shared by every court on one screen: compute once, pass to suggestions().
+  function context(D) { return { ready: readyList(D), rest: restInfo(D) }; }
+
   // Ordered suggestions for one court (§10.2): court mode, lowest round, rest, fixture order.
-  function suggestions(D, court) {
+  function suggestions(D, court, ctx) {
+    ctx = ctx || context(D);
     const s = D.comp.settings, mode = s.courtMode || "shared";
     const home = court.homeDivisionIds || [];
-    let list = readyList(D);
+    let list = ctx.ready.slice();
     if (mode === "dedicated" && home.length) list = list.filter(x => home.indexOf(x.divisionId) !== -1);
-    const rest = restInfo(D), min = s.minRestMatches || 1;
-    const rested = (x) => D.playerIdsOf(x, "A").concat(D.playerIdsOf(x, "B")).every(p => rest.restMatches(p) >= min);
-    const oldest = (x) => Math.max.apply(null, D.playerIdsOf(x, "A").concat(D.playerIdsOf(x, "B")).map(rest.lastEnd).concat([0]));
-    const idx = {};
-    list.forEach((x, i) => { idx[x.id] = i; });
-    const homeRank = (x) => (mode === "homeBorrow" && home.length && home.indexOf(x.divisionId) === -1) ? 1 : 0;
-    const restRank = (x) => (s.restRule === "off" || rested(x)) ? 0 : 1;
-    list.sort((a, b) => homeRank(a) - homeRank(b) || stageOrder(D, a) - stageOrder(D, b) || restRank(a) - restRank(b) || oldest(a) - oldest(b) || idx[a.id] - idx[b.id]);
+    const rest = ctx.rest, min = s.minRestMatches || 1;
+    // sort keys computed once per match, not per comparison
+    const key = {};
+    list.forEach(function (x, i) {
+      const ps = D.playerIdsOf(x, "A").concat(D.playerIdsOf(x, "B"));
+      key[x.id] = {
+        home: (mode === "homeBorrow" && home.length && home.indexOf(x.divisionId) === -1) ? 1 : 0,
+        stage: stageOrder(D, x),
+        rest: (s.restRule === "off" || ps.every(p => rest.restMatches(p) >= min)) ? 0 : 1,
+        oldest: Math.max.apply(null, ps.map(rest.lastEnd).concat([0])),
+        idx: i
+      };
+    });
+    const restRank = (x) => key[x.id].rest;
+    list.sort(function (a, b) {
+      const A = key[a.id], B = key[b.id];
+      return A.home - B.home || A.stage - B.stage || A.rest - B.rest || A.oldest - B.oldest || A.idx - B.idx;
+    });
     if (s.restRule === "strict") {
       const ok = list.filter(x => restRank(x) === 0);
       if (ok.length) return { list: ok, needsConfirm: false };
@@ -83,7 +98,8 @@ const CompSchedule = (function () {
     for (const st of comp.stages) {
       if (st.type !== "groups") continue;
       for (const g of st.groups) {
-        if (D.groupComplete(st.id, g.id) && D.table(st.id, g.id).some(r => r.tiedWith.length && r.rank <= (st.config.advance || 0) + 1)) {
+        // only a tie that touches the qualifying places holds up the knockout
+        if (D.groupComplete(st.id, g.id) && D.table(st.id, g.id).some(r => r.tiedWith.length && r.rank <= (st.config.advance || 0))) {
           return t("courts.tie", { group: g.name });
         }
       }
@@ -100,8 +116,9 @@ const CompSchedule = (function () {
   // the default order, after the matches they depend on, never with a player on two courts.
   function estimate(comp, draw) {
     const s = comp.settings;
-    // Minutes come from the score format (typical length incl. getting on and off court).
-    const per = minutesDefault(comp);
+    // Minutes come from each stage's score format (typical length incl. getting on and off court).
+    const fs = s.matchFormats || {};
+    const perOf = (st) => { const f = st && (fs[st.matchFormatId] || fs.main); return f ? CompFormat.minutesFor(f) : 20; };
     const courts = Math.max(1, s.courtsCount || 1);
     const meetings = {}, matchOf = {};
     draw.meetings.forEach(m => { meetings[m.id] = m; });
@@ -130,7 +147,7 @@ const CompSchedule = (function () {
       const ids = [m.sideA.id, m.sideB.id].filter(Boolean);
       const players = [].concat.apply([], ids.map(id => (entry[id] && entry[id].playerIds) || []));
       const allowed = s.courtMode === "dedicated" ? (s.courtAssign && s.courtAssign[x.divisionId]) || null : null;
-      return { id: x.id, key: (st ? st.order : 0) * 1000 + m.round, idx: i, deps: depsOf(m, {}), players, allowed: allowed && allowed.length ? allowed : null };
+      return { id: x.id, key: (st ? st.order : 0) * 1000 + m.round - (m.thirdPlace ? 0.5 : 0), idx: i, deps: depsOf(m, {}), players, per: perOf(st), allowed: allowed && allowed.length ? allowed : null };
     }).sort((a, b) => a.key - b.key || a.idx - b.idx);
     const end = {}, playerFree = {}, courtFree = new Array(courts).fill(0);
     let remaining = tasks.slice(), guard = 0, makespan = 0;
@@ -148,7 +165,7 @@ const CompSchedule = (function () {
         courtFree[c] = Math.min.apply(null, future);
         continue;
       }
-      const fin = now + per;
+      const fin = now + pick.per;
       end[pick.id] = fin; courtFree[c] = fin; pick.players.forEach(p => { playerFree[p] = fin; });
       makespan = Math.max(makespan, fin);
       remaining.splice(remaining.indexOf(pick), 1);
@@ -173,5 +190,5 @@ const CompSchedule = (function () {
     return String(Math.floor(total / 60) % 24).padStart(2, "0") + ":" + String(total % 60).padStart(2, "0");
   }
 
-  return { isReady, readyList, suggestions, whyNothing, estimate, minutesDefault, fmtDuration, finishTime, busyPlayers };
+  return { isReady, readyList, context, suggestions, whyNothing, estimate, minutesDefault, fmtDuration, finishTime, busyPlayers };
 })();

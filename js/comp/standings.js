@@ -61,7 +61,12 @@ const CompStandings = (function () {
         if (a === "BYE" && b && b !== "BYE") r = { winner: "B", done: true, kind: "bye", match };
         else if (b === "BYE" && a && a !== "BYE") r = { winner: "A", done: true, kind: "bye", match };
         else if (match && match.status === "done" && match.winner) r = { winner: match.winner, done: true, kind: match.outcome === "walkover" ? "walkover" : "result", match };
-        else if (a && b && a !== "BYE" && b !== "BYE" && (withdrawn(a) || withdrawn(b)) && !(withdrawn(a) && withdrawn(b))) {
+        else if (a && b && a !== "BYE" && b !== "BYE" && withdrawn(a) && withdrawn(b)) {
+          // Both pairs withdrew: nothing to play. In a group it simply doesn't count; in a knockout
+          // side A goes through on paper, so the next opponent then gets a walkover.
+          r = meeting.groupId ? { winner: null, done: true, kind: "void", match } : { winner: "A", done: true, kind: "walkover", match };
+        }
+        else if (a && b && a !== "BYE" && b !== "BYE" && (withdrawn(a) || withdrawn(b))) {
           const e = entryById[withdrawn(a) ? a : b];
           if (e.withdrawMode === "void" && meeting.groupId) r = { winner: null, done: true, kind: "void", match };
           else r = { winner: withdrawn(a) ? "B" : "A", done: true, kind: "walkover", match };
@@ -82,7 +87,7 @@ const CompStandings = (function () {
         const t2 = CompFormat.tally(f, CompFormat.walkoverSets(f));
         return o.winner === "A" ? Object.assign(t2, { counted: true }) : { setsA: t2.setsB, setsB: t2.setsA, gamesA: t2.gamesB, gamesB: t2.gamesA, counted: true };
       }
-      return Object.assign(CompFormat.tally(f, o.match.sets), { counted: true });
+      return Object.assign(CompFormat.tally(f, o.match.sets, o.match.outcome), { counted: true, retired: o.match.outcome === "retired" });
     }
 
     function primaryPoints(row) {
@@ -105,7 +110,12 @@ const CompStandings = (function () {
         row.gamesFor += mine[1]; row.gamesAgainst += theirs[1];
         const table = comp.settings.standings.pairs.pointsByScore || {};
         let key = mine[0] + "-" + theirs[0];
-        if (!sc.counted) { const n = CompFormat.needed(formatFor(stageById[meeting.stageId])); key = o.winner === asSide ? n + "-0" : "0-" + n; }
+        const n = CompFormat.needed(formatFor(stageById[meeting.stageId]));
+        if (!sc.counted) key = o.winner === asSide ? n + "-0" : "0-" + n;
+        else if (sc.retired) { // a retirement scores like a full win for the other side
+          const loserSets = Math.min(o.winner === asSide ? theirs[0] : mine[0], n - 1);
+          key = o.winner === asSide ? n + "-" + loserSets : loserSets + "-" + n;
+        }
         row.scorePoints += Number(table[key]) || 0;
       }
     }
@@ -192,8 +202,9 @@ const CompStandings = (function () {
     function groupRankEntry(groupId, rank) {
       const stage = comp.stages.find(s => s.groups.some(g => g.id === groupId));
       if (!stage || !groupComplete(stage.id, groupId)) return null;
-      const row = table(stage.id, groupId)[rank - 1];
-      return row && !row.tiedWith.length ? row.id : null;
+      const rows = table(stage.id, groupId), row = rows[rank - 1];
+      if (!row) return "BYE"; // fewer pairs left than places (a void withdrawal): that slot is a bye
+      return !row.tiedWith.length ? row.id : null;
     }
 
     function entryLabel(id) {
@@ -263,15 +274,17 @@ const CompStandings = (function () {
     for (let guard = 0; guard < 50; guard++) {
       const stale = staleMatches(comp);
       if (!stale.length) break;
-      stale.forEach(function (x) {
-        if (x.status === "done") x.history.push({ at: Date.now(), sets: x.sets, winner: x.winner, outcome: x.outcome, cleared: true });
-        x.status = "pending"; x.sets = []; x.winner = null; x.outcome = null; x.courtId = null;
-        x.startedAt = null; x.endedAt = null; x.entryIds = null; x.sideA.playerIds = []; x.sideB.playerIds = [];
-        cleared.push(x);
-      });
+      stale.forEach(function (x) { resetMatch(x); cleared.push(x); });
     }
     return cleared;
   }
 
-  return { derive, staleMatches, clearStale };
+  // Back to "not started": a finished result goes into the match history first.
+  function resetMatch(x) {
+    if (x.status === "done") x.history.push({ at: Date.now(), sets: x.sets, winner: x.winner, outcome: x.outcome, cleared: true });
+    x.status = "pending"; x.sets = []; x.winner = null; x.outcome = null; x.courtId = null;
+    x.startedAt = null; x.endedAt = null; x.entryIds = null; x.sideA.playerIds = []; x.sideB.playerIds = [];
+  }
+
+  return { derive, staleMatches, clearStale, resetMatch };
 })();

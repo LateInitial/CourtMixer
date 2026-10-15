@@ -536,6 +536,44 @@ function runSelfTests(){
     const est = CompSchedule.estimate(gk, { stages: gk.stages, meetings: gk.meetings, matches: gk.matches });
     ok("time estimate is positive and rounded to 5 minutes", est.minutes > 0 && est.minutes % 5 === 0 && est.complete);
 
+    out.push("audit fixes");
+    ok("30-5 at cap 30 warns; 30-28 is fine", set1(b21, 30, 5).warnings.length === 1 && clean(set1(b21, 30, 28)));
+    eq("retired: the unfinished game isn't a game won", CompFormat.tally(b21, [{ a: 21, b: 15 }, { a: 8, b: 3 }], "retired"), { setsA: 1, setsB: 0, gamesA: 29, gamesB: 18 });
+    eq("retired at a level score can be saved", CompFormat.evaluateScore(b21, [{ a: 21, b: 15 }, { a: 11, b: 11 }], { partial: true }).errors, []);
+    const pp = Wizard.pairsUtil.parsePairs("Ann f / Ben m\nCy / Di f / f\nEd / Flo mf\nMary Jane / Tom\nA / B / C");
+    eq("paste: genders after names or at the end of the line", pp.pairs.map(p => p.names.join("+") + ":" + p.genders.join("")),
+      ["Ann+Ben:FM", "Cy+Di:FF", "Ed+Flo:MF", "Mary Jane+Tom:"]);
+    eq("paste: a line with three names is skipped", pp.bad, ["A / B / C"]);
+    const TW = league(4, [[2, 3, 21, 10]]);
+    TW.c.entries[0].withdrawn = true; TW.c.entries[0].withdrawMode = "walkover";
+    TW.c.entries[1].withdrawn = true; TW.c.entries[1].withdrawMode = "walkover";
+    ok("two withdrawn pairs in one group don't stall it", CompStandings.derive(TW.c).groupComplete(TW.c.stages[0].id, TW.c.stages[0].groups[0].id));
+    const old = { schemaVersion: 1, id: "o", settings: { standings: { pairs: { pointsWin: 1, pointsLoss: 0, pointsByScore: null, rankBy: "wins", tiebreakers: ["headToHead"] } }, changeoverMinutes: 3 } };
+    const mig = CompModel.migrate(old);
+    ok("v1.10.0 drafts are upgraded (standings shape, new settings)", mig.schemaVersion === 2 && mig.settings.standings.pairs.league.win === 3 &&
+      mig.settings.standings.pairs.pointsByScore["2-0"] === 3 && mig.settings.timeAvailable === 240 && mig.settings.changeoverMinutes === undefined);
+    const dsrc = JSON.parse(JSON.stringify(TW.c));
+    const dd = CompModel.duplicate(dsrc);
+    ok("duplicate brings withdrawn pairs back", dd.entries.every(e => !e.withdrawn));
+    const kd = KD(), order = CompSchedule.readyList(kd).map(x => kd.meetingById[x.meetingId]);
+    ok("3rd-place match is queued before the final", order.length === 2 && order[0].thirdPlace === true);
+    // void withdrawal leaving fewer pairs than knockout places: that slot becomes a bye
+    const vg = CompModel.newCompetition({ name: "VG" }); vg.sport = "padel";
+    CompModel.setDivisionCount(vg, 1);
+    for (let i = 0; i < 6; i++) Wizard.pairsUtil.addPair(vg, vg.divisions[0].id, ["V" + i + "a", "V" + i + "b"], ["M", "M"]);
+    vg.settings.matchFormats = { main: F("padRace4") };
+    vg.settings.stagePlan = { all: Object.assign(CompModel.stagePlanFor("groups"), { groupSize: 3, advance: 3 }) };
+    CompGenerate.applyDraw(vg, CompGenerate.generateDraw(vg)); vg.status = "live";
+    const vgs = vg.stages[0], gA = vgs.groups[0];
+    const out1 = vg.entries.find(e => e.id === gA.entryIds[0]); out1.withdrawn = true; out1.withdrawMode = "void";
+    vg.meetings.filter(m => m.stageId === vgs.id).forEach(m => {
+      const x = vg.matches.find(mm => mm.meetingId === m.id);
+      if (CompStandings.derive(vg).outcome(m).done) return;
+      CompResults.apply(vg, x.id, { sets: [{ a: 4, b: 2 }], winner: "A" });
+    });
+    const VD = CompStandings.derive(vg);
+    eq("a place left empty by a void withdrawal is a bye", VD.groupRankEntry(gA.id, 3), "BYE");
+
     out.push("use recommended, then generate");
     const ur = CompModel.newCompetition({ name: "Rec" });
     CompModel.applyPreset(ur, CompModel.RECOMMENDED_PRESET);

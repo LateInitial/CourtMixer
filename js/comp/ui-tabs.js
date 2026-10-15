@@ -16,10 +16,8 @@ const CompUI = (function () {
     if (x.outcome === "walkover") return t("results.wo");
     return (x.sets || []).map(s => s.a + "–" + s.b + (Number.isInteger(s.tbA) ? "(" + Math.min(s.tbA, s.tbB) + ")" : "")).join("  ") + (x.outcome === "retired" ? " " + t("results.ret") : "");
   }
-  function elapsed(since) {
-    const s = Math.max(0, Math.floor((Date.now() - since) / 1000));
-    return String(Math.floor(s / 60)).padStart(2, "0") + ":" + String(s % 60).padStart(2, "0");
-  }
+  // Whole minutes on court (refreshed every 30 s).
+  function elapsed(since) { return t("courts.elapsed", { m: Math.max(0, Math.floor((Date.now() - since) / 60000)) }); }
   function divName(D, id) { const d = D.divisionById[id]; return d ? d.name : ""; }
 
   /* ===== Courts ===== */
@@ -29,6 +27,7 @@ const CompUI = (function () {
     // Each idle court gets its own suggestion: a match (or player) offered to an earlier court
     // isn't offered again.
     const takenMatch = {}, takenPlayer = {};
+    const ctx = CompSchedule.context(D); // ready list + rest, shared by every court
     comp.courts.filter(c => c.active).forEach(function (c) {
       const x = comp.matches.find(m => m.status === "onCourt" && m.courtId === c.id);
       h += '<div class="card cc-card' + (x ? " busy" : "") + '"><div class="cc-head"><b>' + esc(c.name) + "</b>";
@@ -43,7 +42,7 @@ const CompUI = (function () {
           '<button type="button" class="secondary" data-act="more" data-id="' + x.id + '" aria-label="' + esc(t("courts.more")) + '">⋯</button></div>';
       } else {
         h += '<span class="muted">' + esc(t("courts.free")) + "</span></div>";
-        const sg = CompSchedule.suggestions(D, c);
+        const sg = CompSchedule.suggestions(D, c, ctx);
         const s = sg.list.find(x => !takenMatch[x.id] && !D.playerIdsOf(x, "A").concat(D.playerIdsOf(x, "B")).some(p => takenPlayer[p]));
         if (s) {
           takenMatch[s.id] = true;
@@ -55,14 +54,14 @@ const CompUI = (function () {
             '<button type="button" class="secondary" data-act="choose" data-court="' + c.id + '">' + esc(t("courts.choose")) + "</button></div>";
         } else {
           h += '<div class="muted cc-why">' + esc(CompSchedule.whyNothing(D, c)) + "</div>";
-          if (CompSchedule.readyList(D).length) h += '<div class="comp-actions"><button type="button" class="secondary" data-act="choose" data-court="' + c.id + '">' + esc(t("courts.choose")) + "</button></div>";
+          if (ctx.ready.length) h += '<div class="comp-actions"><button type="button" class="secondary" data-act="choose" data-court="' + c.id + '">' + esc(t("courts.choose")) + "</button></div>";
         }
       }
       h += "</div>";
     });
     h += "</div>";
     // Up next
-    const ready = CompSchedule.readyList(D, ui.upNextDiv || null);
+    const ready = ui.upNextDiv ? ctx.ready.filter(x => x.divisionId === ui.upNextDiv) : ctx.ready;
     h += '<div class="card"><div class="wiz-label">' + esc(t("courts.upNext")) + "</div>";
     if (comp.divisions.length > 1) h += chips("upNextDiv", [{ value: "", label: t("filter.all") }].concat(comp.divisions.map(d => ({ value: d.id, label: d.name }))), ui.upNextDiv);
     if (!ready.length) h += '<div class="muted">' + esc(t("courts.noneReady")) + "</div>";
@@ -88,7 +87,7 @@ const CompUI = (function () {
   function sendBack(comp, matchId) {
     const x = comp.matches.find(m => m.id === matchId);
     if (!x || x.status !== "onCourt") return;
-    x.status = "pending"; x.courtId = null; x.startedAt = null; x.entryIds = null; x.sideA.playerIds = []; x.sideB.playerIds = [];
+    CompStandings.resetMatch(x);
     CompStore.save(comp); CompShell.render();
   }
   function chooseMatch(comp, courtId) {
@@ -196,12 +195,12 @@ const CompUI = (function () {
     }
     cmxShowModal({ title: t("standings.decide"), bodyHTML: body(), onOpen: bind, buttons: [
       { label: t("standings.decide.save"), cls: "primary", onClick: function () {
+        const before = JSON.parse(JSON.stringify(comp));
         CompShell.snapshot(t("standings.decide"), comp);
         st.config.manualOrder = st.config.manualOrder || {};
         const prev = st.config.manualOrder[groupId] || [];
         st.config.manualOrder[groupId] = order.concat(prev.filter(id => order.indexOf(id) === -1));
-        CompStandings.clearStale(comp);
-        CompStore.save(comp); CompShell.render();
+        setTimeout(function () { CompShell.settle(comp, before, t("standings.decide")); }, 0);
       } },
       { label: t("wiz.close"), cls: "ghost", onClick: function () {} }] });
   }
@@ -278,7 +277,7 @@ const CompUI = (function () {
       e.playerIds.forEach(id => { const p = comp.players.find(x => x.id === id); if (p) p.withdrawn = true; });
       comp.matches.forEach(x => { // anything on court for them goes back
         const m = comp.meetings.find(mm => mm.id === x.meetingId);
-        if (x.status === "onCourt" && x.entryIds && (x.entryIds.A === e.id || x.entryIds.B === e.id)) { x.status = "pending"; x.courtId = null; x.startedAt = null; x.entryIds = null; x.sideA.playerIds = []; x.sideB.playerIds = []; }
+        if (x.status === "onCourt" && x.entryIds && (x.entryIds.A === e.id || x.entryIds.B === e.id)) CompStandings.resetMatch(x);
         if (mode === "void" && m && m.groupId && x.status === "done" && x.entryIds && (x.entryIds.A === e.id || x.entryIds.B === e.id)) m.status = "void";
       });
       comp.log.push({ at: Date.now(), action: "withdraw", entryId: e.id, mode });
@@ -295,8 +294,8 @@ const CompUI = (function () {
 
   // A started (on court) or finished match locks a division's draw.
   function divisionStarted(comp, divId) { return comp.matches.some(x => x.divisionId === divId && (x.status === "done" || x.status === "onCourt")); }
-  function categoryGenders(comp, divId) { const d = comp.divisions.find(x => x.id === divId); return d && d.category === "WD" ? ["F", "F"] : d && d.category === "XD" ? ["M", "F"] : ["M", "M"]; }
-  function labelOf(comp, e) { return e.playerIds.map(id => (comp.players.find(p => p.id === id) || {}).name || "?").join(" / "); }
+  function categoryGenders(comp, divId) { const d = comp.divisions.find(x => x.id === divId); return Wizard.pairsUtil.defaultGenders(d && d.category); }
+  const labelOf = (comp, e) => Wizard.pairsUtil.labelOf(comp, e);
 
   // Name + M/F rows in the shared modal. onSave(names, genders) returns false to keep it open.
   function peopleDialog(title, hint, names, genders, saveLabel, onSave) {
@@ -424,7 +423,7 @@ const CompUI = (function () {
     }
     else if (a === "choose") chooseMatch(comp, b.dataset.court);
     else if (a === "score" || a === "editResult") CompScore.open(comp, b.dataset.id);
-    else if (a === "scoreMode") { CompScore.open(comp, b.dataset.id); const btn = document.querySelector('#compSheet [data-act="mode"][data-mode="' + b.dataset.mode + '"]'); if (btn) btn.click(); }
+    else if (a === "scoreMode") CompScore.open(comp, b.dataset.id, { mode: b.dataset.mode });
     else if (a === "more") moreMenu(comp, b.dataset.id);
     else if (a === "upNextDiv") { ui.upNextDiv = v; CompShell.render(); }
     else if (a === "showAll") { ui.showAll = !ui.showAll; CompShell.render(); }

@@ -141,7 +141,7 @@ const CompFormat = (function () {
       const T = f.target, cap = f.cap;
       if (cap && w > cap) warnings.push(t("fmt.warn.cap", { s: sc, n: cap }));
       else if (w < T) warnings.push(t("fmt.warn.short", { s: sc, n: T }));
-      else if (cap && w === cap) { if (w - l < 1) warnings.push(t("fmt.warn.lead", { s: sc })); }
+      else if (cap && w === cap && cap > T) { if (l < cap - 2) warnings.push(t("fmt.warn.over", { s: sc, n: T })); } // 30-29 / 30-28 only
       else if (f.winBy === 2) {
         if (w - l < 2) warnings.push(t("fmt.warn.lead2", { s: sc }));
         else if (w > T && w - l !== 2) warnings.push(t("fmt.warn.over", { s: sc, n: T }));
@@ -181,6 +181,8 @@ const CompFormat = (function () {
     let wa = 0, wb = 0, decided = null, draw = false;
     sets.forEach(function (s, i) {
       if (decided) { errors.push(t("fmt.err.afterDecided", { n: i + 1 })); return; }
+      // A retirement can happen at a level score in the game being played.
+      if (opts.partial && i === sets.length - 1 && isInt(s.a) && isInt(s.b) && s.a === s.b && s.a >= 0) return;
       const r = evaluateSet(f, s, i);
       r.errors.forEach(e => errors.push(e)); r.warnings.forEach(w => warnings.push(w));
       if (r.winner === "A") wa++; else if (r.winner === "B") wb++; else if (r.winner === "draw") draw = true;
@@ -192,12 +194,16 @@ const CompFormat = (function () {
     return { winner: errors.length ? null : decided, complete, warnings, errors, setsA: wa, setsB: wb, draw };
   }
 
-  // Totals for standings: sets and games/points won by each side.
-  function tally(f, sets) {
+  // Totals for standings: sets and games/points won by each side. In a retired match the game
+  // being played when it stopped counts for points/games but isn't a set won.
+  function tally(f, sets, outcome) {
     let setsA = 0, setsB = 0, gamesA = 0, gamesB = 0;
-    (sets || []).forEach(function (s, i) {
+    sets = sets || [];
+    sets.forEach(function (s, i) {
       gamesA += Number(s.a) || 0; gamesB += Number(s.b) || 0;
-      if (f.setType !== "totalPoints") { if (s.a > s.b) setsA++; else if (s.b > s.a) setsB++; }
+      if (f.setType === "totalPoints") return;
+      if (outcome === "retired" && i === sets.length - 1) { const ev = evaluateSet(f, s, i); if (!ev.winner || ev.warnings.length) return; }
+      if (s.a > s.b) setsA++; else if (s.b > s.a) setsB++;
     });
     return { setsA, setsB, gamesA, gamesB };
   }

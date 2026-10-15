@@ -212,7 +212,20 @@
     const sp = comp.settings.stagePlan, k = planKey(comp);
     return sp[k] || sp.all || { type: "groups" };
   }
+  // Estimates are cached on everything they depend on, so taps on the Format step don't
+  // regenerate and simulate whole draws again.
+  const trialCache = new Map();
   function trial(comp, plan, divId) {
+    const s = comp.settings;
+    const key = JSON.stringify([comp.id, plan, divId, s.formatPlan, s.formatPlan === "perDivision" ? s.stagePlan : null, s.courtsCount, s.courtMode, s.courtAssign, s.matchFormats,
+      comp.entries.map(e => [e.id, e.divisionId, e.seed, e.withdrawn])]);
+    if (trialCache.has(key)) return trialCache.get(key);
+    const r = trialUncached(comp, plan, divId);
+    if (trialCache.size > 60) trialCache.clear();
+    trialCache.set(key, r);
+    return r;
+  }
+  function trialUncached(comp, plan, divId) {
     // estimate for a plan, applied to one division (or all)
     const copy = JSON.parse(JSON.stringify(comp));
     if (divId && divId !== "all") { copy.settings.formatPlan = "perDivision"; copy.settings.stagePlan[divId] = plan; }
@@ -416,7 +429,10 @@
   /* ===== Step 11: Standings and tiebreakers ===== */
   const TB_ALL = ["headToHead", "setDiff", "gameDiff", "gamesWon", "manual"];
   Wizard.register("standings", {
-    validate: function () { return []; },
+    validate: function (comp) {
+      const f = (comp.settings.matchFormats || {}).main;
+      return comp.settings.standings.pairs.rankBy === "score" && (!f || f.sets !== 3) ? ["wiz.err.scoreRank"] : [];
+    },
     body: function (comp) {
       const p = comp.settings.standings.pairs, f = ensureFormat(comp, "main");
       const unit = f.setType === "games" ? "games" : "points";
@@ -592,5 +608,5 @@
     return CompSchedule.estimate(c, CompGenerate.generateDraw(c));
   }
 
-  Wizard.pairsUtil = { addPair, removeEntry, parsePairs, ensureFormat, recommendedFormat, syncCourtNames };
+  Wizard.pairsUtil = { addPair, removeEntry, parsePairs, ensureFormat, recommendedFormat, syncCourtNames, labelOf, defaultGenders };
 })();
