@@ -313,7 +313,7 @@ const Wizard = (function () {
       const last = comp.teams[comp.teams.length - 1], count = last ? comp.players.filter(p => p.teamId === last.id).length : 0;
       if (n < comp.teams.length && count) {
         cmxConfirm({ title: t("teams.removeTeam"), yes: t("teams.removeTeam"), danger: true, message: t("teams.removeTeam.q", { team: last.name, n: count }) },
-          function () { change("teams", () => CompModel.setTeamCount(comp, n)); });
+          function () { const hit = affected(comp, "teams"); CompModel.setTeamCount(comp, n); markReview(comp, hit); rerender(); }); // one prompt, not two
       } else change("teams", () => CompModel.setTeamCount(comp, n));
     }
     else if (act === "teamColor") { comp.teams[Number(el.dataset.idx)].color = el.dataset.value || null; rerender(); }
