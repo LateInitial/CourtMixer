@@ -330,7 +330,11 @@ function runSelfTests(){
     ok("entries kept, moved to Unassigned", w.entries.length === 1 && w.entries[0].divisionId === null && w.players[0].divisionId === null);
     eq("Unassigned bucket lists them", [CompModel.unassigned(w).players.length, CompModel.unassigned(w).entries.length], [1, 1]);
     eq("Review is blocked while steps need review", Wizard.blockers(w), ["entries", "format"]);
-    Wizard.jump(w, "entries"); Wizard.next(w);
+    Wizard.jump(w, "entries");
+    eq("Entries blocks Next while pairs are unassigned", Wizard.next(w), ["wiz.err.pairs", "wiz.err.unassigned"]);
+    w.entries[0].divisionId = w.divisions[0].id;
+    Wizard.pairsUtil.addPair(w, w.divisions[0].id, ["Ann", "Ben"], ["F", "M"]);
+    Wizard.next(w);
     ok("Next on a flagged step clears its flag", !w.wizard.needsReview.entries);
 
     out.push("use recommended for the rest");
@@ -395,6 +399,153 @@ function runSelfTests(){
       Wizard.visibleSteps(cmp).forEach(id => { cmp.wizard.currentStep = id; Wizard.mount(host, cmp); });
     });
     eq("no missing strings", Object.keys(STR.missing), []);
+
+    // ===== Phase 3: pairs competitions =====
+    out.push("score formats (evaluateScore)");
+    const F = (id) => CompFormat.fromPreset(id);
+    const set1 = (f, a, b, extra) => CompFormat.evaluateSet(f, Object.assign({ a, b }, extra || {}), 0);
+    const clean = (r) => !r.errors.length && !r.warnings.length;
+    const b21 = F("bad3x21"), b30 = F("bad1x30"), b15 = F("bad3x15"), pro = F("tenPro8"), shortS = F("tenShort4"), pad = F("padRace4");
+    ok("badminton 21/cap 30: 21-19, 22-20, 30-29 are fine", clean(set1(b21, 21, 19)) && clean(set1(b21, 22, 20)) && clean(set1(b21, 30, 29)));
+    ok("badminton 21/cap 30: 21-20 and 31-29 warn", set1(b21, 21, 20).warnings.length === 1 && set1(b21, 31, 29).warnings.length === 1);
+    ok("badminton 30 no cap: 58-56 fine, 31-30 warns", clean(set1(b30, 58, 56)) && set1(b30, 31, 30).warnings.length === 1);
+    ok("badminton 15/cap 21: 21-20 fine", clean(set1(b15, 21, 20)));
+    ok("tennis pro set: 8-6 fine, 9-8 with tiebreak fine, 8-7 warns",
+      clean(set1(pro, 8, 6)) && clean(set1(pro, 9, 8, { tbA: 7, tbB: 4 })) && set1(pro, 8, 7).warnings.length === 1);
+    eq("short sets + match tiebreak: 4-2, 2-4, [10-8] -> A", CompFormat.evaluateScore(shortS, [{ a: 4, b: 2 }, { a: 2, b: 4 }, { a: 10, b: 8 }]).winner, "A");
+    ok("padel race to 4: 4-3 fine, 5-3 warns", clean(set1(pad, 4, 3)) && set1(pad, 5, 3).warnings.length === 1);
+    ok("error: a third game after the match was decided", CompFormat.evaluateScore(b21, [{ a: 21, b: 10 }, { a: 21, b: 12 }, { a: 21, b: 5 }]).errors.length === 1);
+    ok("error: unfinished match without retiring", CompFormat.evaluateScore(b21, [{ a: 21, b: 10 }]).errors.length === 1);
+    ok("error: negative or fractional scores", set1(b21, -1, 21).errors.length === 1 && set1(b21, 20.5, 21).errors.length === 1);
+    eq("walkover at the format's maximum", CompFormat.walkoverSets(b21), [{ a: 21, b: 0 }, { a: 21, b: 0 }]);
+
+    out.push("fixture generation");
+    let rrOk = true;
+    for (let n = 3; n <= 10; n++) {
+      const ids = Array.from({ length: n }, (_, i) => "e" + i), rounds = CompGenerate.roundRobin(ids), seen = {};
+      let dup = false;
+      rounds.forEach(r => r.forEach(p => { const k = p.slice().sort().join("|"); if (seen[k]) dup = true; seen[k] = true; }));
+      const byesOk = rounds.every(r => r.length === Math.floor(n / 2));
+      if (dup || Object.keys(seen).length !== n * (n - 1) / 2 || rounds.length !== (n % 2 ? n : n - 1) || !byesOk) rrOk = false;
+    }
+    ok("round robin n=3..10: every pair meets once, byes and round counts correct", rrOk);
+    const ord8 = ["s1", "s2", "s3", "s4", "s5", "s6", "s7", "s8"];
+    eq("snake seeding: 8 seeds into 2 groups", CompGenerate.splitGroups(ord8, 4), [["s1", "s4", "s5", "s8"], ["s2", "s3", "s6", "s7"]]);
+    const sizesOk = [5, 7, 9, 10, 13].every(n => { const g = CompGenerate.splitGroups(Array.from({ length: n }, (_, i) => i), 4).map(x => x.length); return Math.max.apply(null, g) - Math.min.apply(null, g) <= 1; });
+    ok("group sizes differ by at most 1", sizesOk);
+    let koOk = true;
+    for (let n = 5; n <= 16; n++) {
+      const size = CompGenerate.nextPow2(n), pos = CompGenerate.bracketPositions(size);
+      const half = pos.slice(0, size / 2);
+      if ((half.indexOf(1) !== -1) === (half.indexOf(2) !== -1)) koOk = false;   // 1 and 2 in opposite halves
+      for (let k = 0; k < size / 2; k++) {                                      // byes only face top seeds
+        const a = pos[2 * k], b = pos[2 * k + 1], bye = a > n ? b : b > n ? a : null;
+        if (bye !== null && bye > size - n) koOk = false;
+      }
+    }
+    ok("knockout n=5..16: bracket size, byes to top seeds, 1 and 2 in opposite halves", koOk);
+    const cross = (g) => { const q = CompGenerate.placeQualifiers(g, 2).slots; for (let i = 0; i < q.length; i += 2) if (q[i] && q[i + 1] && q[i].group === q[i + 1].group) return false; return true; };
+    ok("cross-over from 2, 3 and 4 groups: no group-mates in the first knockout round", cross(2) && cross(3) && cross(4));
+    eq("4 groups cross over A1-D2, D1-A2, B1-C2, C1-B2", CompGenerate.placeQualifiers(4, 2).slots.map(s => String.fromCharCode(65 + s.group) + s.rank).join(" "), "A1 D2 D1 A2 B1 C2 C1 B2");
+
+    out.push("standings and tiebreakers");
+    // Builds a live one-group round robin with the given results: [[i, j, setsA-B per game...]]
+    const league = (n, results, opts) => {
+      const c = CompModel.newCompetition({ name: "T" }); c.sport = "badminton";
+      CompModel.setDivisionCount(c, 1);
+      for (let i = 0; i < n; i++) Wizard.pairsUtil.addPair(c, c.divisions[0].id, ["P" + i + "a", "P" + i + "b"], ["M", "M"]);
+      c.settings.matchFormats = { main: F("bad1x21") };
+      c.settings.stagePlan = { all: CompModel.stagePlanFor("roundRobin") };
+      Object.assign(c.settings, opts || {});
+      CompGenerate.applyDraw(c, CompGenerate.generateDraw(c)); c.status = "live";
+      results.forEach(function (r) {
+        const a = c.entries[r[0]].id, b = c.entries[r[1]].id;
+        const m = c.meetings.find(mm => (mm.sideA.id === a && mm.sideB.id === b) || (mm.sideA.id === b && mm.sideB.id === a));
+        const flip = m.sideA.id !== a, x = c.matches.find(mm => mm.meetingId === m.id);
+        const sets = [flip ? { a: r[3], b: r[2] } : { a: r[2], b: r[3] }];
+        CompResults.apply(c, x.id, { sets, outcome: r[4] || "normal", winner: (sets[0].a > sets[0].b) ? "A" : "B" });
+        if (r[4] === "walkover") { x.sets = []; x.winner = flip ? (r[2] > r[3] ? "B" : "A") : (r[2] > r[3] ? "A" : "B"); }
+      });
+      const D = CompStandings.derive(c), st = c.stages[0];
+      return { c, rows: D.table(st.id, st.groups[0].id), names: () => D.table(st.id, st.groups[0].id).map(r => c.entries.findIndex(e => e.id === r.id)) };
+    };
+    // 0 beats 1, 1 beats 2, 2 beats 0 (all 1 win among themselves); 3 loses to all. Point differences decide.
+    const L1 = league(4, [[0, 1, 21, 19], [1, 2, 21, 10], [2, 0, 21, 15], [0, 3, 21, 5], [1, 3, 21, 5], [2, 3, 21, 5]]);
+    eq("3-way tie: head-to-head level, point difference decides (+25, +12, +11)", L1.names(), [1, 0, 2, 3]);
+    // 0 and 1 both win 2; 0 has the far better point difference, but 1 beat 0
+    const L2 = league(4, [[1, 0, 21, 19], [0, 2, 21, 0], [0, 3, 21, 0], [2, 1, 21, 19], [1, 3, 21, 19], [3, 2, 21, 19]]);
+    eq("head-to-head separates a two-way tie before differences", L2.names().slice(0, 2), [1, 0]);
+    const L3 = league(4, [[0, 1, 21, 10], [1, 2, 21, 10], [2, 0, 21, 10], [0, 3, 21, 5], [1, 3, 21, 5], [2, 3, 21, 5]]);
+    ok("a tie nothing can split is flagged for the organiser", L3.rows.slice(0, 3).every(r => r.tiedWith.length === 2));
+    L3.c.stages[0].config.manualOrder[L3.c.stages[0].groups[0].id] = [L3.c.entries[2].id, L3.c.entries[0].id, L3.c.entries[1].id];
+    eq("Tie \u2014 decide order is used", CompStandings.derive(L3.c).table(L3.c.stages[0].id, L3.c.stages[0].groups[0].id).slice(0, 3).map(r => L3.c.entries.findIndex(e => e.id === r.id)), [2, 0, 1]);
+    const W1 = league(2, [[0, 1, 21, 0, "walkover"]], { walkoverScore: "formatMax" });
+    const W2 = league(2, [[0, 1, 21, 0, "walkover"]], { walkoverScore: "winOnly" });
+    ok("walkover counts per setting (max score vs win only)", W1.rows[0].gamesFor === 21 && W2.rows[0].gamesFor === 0 && W2.rows[0].won === 1);
+    const V = league(3, [[0, 1, 21, 10], [0, 2, 21, 10]]);
+    V.c.entries[0].withdrawn = true; V.c.entries[0].withdrawMode = "void";
+    const vRows = CompStandings.derive(V.c).table(V.c.stages[0].id, V.c.stages[0].groups[0].id);
+    ok("void withdrawal: their results disappear from the table", vRows.length === 2 && vRows.every(r => r.played === 0));
+    const WO = league(3, [[1, 2, 21, 10]]);
+    WO.c.entries[0].withdrawn = true; WO.c.entries[0].withdrawMode = "walkover";
+    const woRows = CompStandings.derive(WO.c).table(WO.c.stages[0].id, WO.c.stages[0].groups[0].id);
+    ok("walkover withdrawal: opponents get the remaining matches", woRows.find(r => r.id === WO.c.entries[1].id).won === 2 && woRows.find(r => r.id === WO.c.entries[0].id).lost === 2);
+
+    out.push("knockout results and cascade");
+    const k = CompModel.newCompetition({ name: "KO" }); k.sport = "badminton";
+    CompModel.setDivisionCount(k, 1);
+    for (let i = 0; i < 4; i++) { const e = Wizard.pairsUtil.addPair(k, k.divisions[0].id, ["K" + i + "a", "K" + i + "b"], ["M", "M"]); e.seed = i + 1; }
+    k.settings.matchFormats = { main: F("bad1x21") };
+    k.settings.stagePlan = { all: CompModel.stagePlanFor("knockout") };
+    CompGenerate.applyDraw(k, CompGenerate.generateDraw(k)); k.status = "live";
+    const KD = () => CompStandings.derive(k);
+    const sfs = k.meetings.filter(m => m.round === 1), fin = k.meetings.find(m => m.round === 2 && !m.thirdPlace), third = k.meetings.find(m => m.thirdPlace);
+    ok("4 seeds: semis 1v4 and 2v3, a final and a 3rd-place match", sfs.length === 2 && !!fin && !!third && sfs[0].sideA.id === k.entries[0].id && sfs[0].sideB.id === k.entries[3].id);
+    const mOf = (m) => k.matches.find(x => x.meetingId === m.id);
+    CompResults.apply(k, mOf(sfs[0]).id, { sets: [{ a: 21, b: 10 }], winner: "A" });
+    CompResults.apply(k, mOf(sfs[1]).id, { sets: [{ a: 21, b: 10 }], winner: "A" });
+    ok("winners reach the final", KD().side(fin, "A") === k.entries[0].id && KD().side(fin, "B") === k.entries[1].id);
+    ok("final is ready to start", CompSchedule.isReady(KD(), mOf(fin)));
+    CompResults.apply(k, mOf(fin).id, { sets: [{ a: 21, b: 18 }], winner: "A" });
+    // change semi-final 1: seed 4 now wins
+    CompResults.apply(k, mOf(sfs[0]).id, { sets: [{ a: 10, b: 21 }], winner: "B" });
+    eq("editing a semi-final flags the final", CompStandings.staleMatches(k).map(x => x.meetingId), [fin.id]);
+    CompStandings.clearStale(k);
+    ok("cascade clears the final and keeps it in history", mOf(fin).status === "pending" && mOf(fin).history.length === 1 && KD().side(fin, "A") === k.entries[3].id);
+
+    out.push("groups + knockout end to end");
+    const gk = CompModel.newCompetition({ name: "GK" }); gk.sport = "padel";
+    CompModel.setDivisionCount(gk, 1);
+    for (let i = 0; i < 8; i++) Wizard.pairsUtil.addPair(gk, gk.divisions[0].id, ["G" + i + "a", "G" + i + "b"], ["M", "F"]);
+    gk.settings.matchFormats = { main: F("padRace4") };
+    gk.settings.stagePlan = { all: CompModel.stagePlanFor("groups") };
+    CompGenerate.applyDraw(gk, CompGenerate.generateDraw(gk)); gk.status = "live";
+    const gst = gk.stages.find(s => s.type === "groups"), kst = gk.stages.find(s => s.type === "knockout");
+    ok("2 groups of 4 and a 4-team knockout", gst.groups.length === 2 && gst.groups.every(g => g.entryIds.length === 4) && kst.config.size === 4);
+    const ko1 = gk.meetings.filter(m => m.stageId === kst.id && m.round === 1);
+    ok("knockout waits for the groups", ko1.every(m => !CompStandings.derive(gk).side(m, "A")));
+    // play every group match: lower entry index wins 4-1
+    const idx = (id) => gk.entries.findIndex(e => e.id === id);
+    gk.meetings.filter(m => m.stageId === gst.id).forEach(m => {
+      const aWins = idx(m.sideA.id) < idx(m.sideB.id);
+      CompResults.apply(gk, gk.matches.find(x => x.meetingId === m.id).id, { sets: [aWins ? { a: 4, b: 1 } : { a: 1, b: 4 }], winner: aWins ? "A" : "B" });
+    });
+    const GD = CompStandings.derive(gk);
+    ok("group winners and runners-up fill the knockout", ko1.every(m => GD.side(m, "A") && GD.side(m, "B")));
+    ok("no group-mates meet in the first knockout round", ko1.every(m => !gst.groups.some(g => g.entryIds.indexOf(GD.side(m, "A")) !== -1 && g.entryIds.indexOf(GD.side(m, "B")) !== -1)));
+    const est = CompSchedule.estimate(gk, { stages: gk.stages, meetings: gk.meetings, matches: gk.matches });
+    ok("time estimate is positive and rounded to 5 minutes", est.minutes > 0 && est.minutes % 5 === 0 && est.complete);
+
+    out.push("use recommended, then generate");
+    const ur = CompModel.newCompetition({ name: "Rec" });
+    CompModel.applyPreset(ur, CompModel.RECOMMENDED_PRESET);
+    ur.sport = "tennis"; ur.wizard.visited.start = true;
+    Wizard.next(ur); Wizard.next(ur); Wizard.next(ur); // basics -> type -> divisions
+    ur.divisions.forEach(d => { for (let i = 0; i < 5; i++) Wizard.pairsUtil.addPair(ur, d.id, [d.name + i + "a", d.name + i + "b"], ["M", "M"]); });
+    eq("use recommended from Divisions", Wizard.useRecommended(ur), []);
+    eq("nothing blocks Generate", [Wizard.invalidSteps(ur), Wizard.blockers(ur), Wizard.unbuilt(ur)], [[], [], []]);
+    const draw = CompGenerate.generateDraw(ur);
+    ok("the draw has matches for both divisions", ur.divisions.every(d => draw.matches.some(x => x.divisionId === d.id)));
   } finally {
     Store._useBackend(_realBackend);
     _storageWarned = _warned;

@@ -55,12 +55,12 @@ const CompModel = (function () {
       stagePlan: { all: { type: "groups", groupSize: 4, advance: 2, thirdPlace: true, seeding: "snake" } },
       matchFormats: {},
       standings: {
-        pairs: { pointsWin: 1, pointsLoss: 0, pointsByScore: null, rankBy: "wins",
+        pairs: { rankBy: "wins", league: { win: 3, loss: 0 }, pointsByScore: { "2-0": 3, "2-1": 2, "1-2": 1, "0-2": 0 },
           tiebreakers: ["headToHead", "setDiff", "gameDiff", "gamesWon", "manual"] },
         teams: { resultMode: "meeting", meetingPoints: { win: 2, draw: 1, loss: 0 }, splitRule: "totalGames",
           tiebreakers: ["headToHead", "matchDiff", "setDiff", "gameDiff", "manual"] }
       },
-      walkoverScore: "formatMax",
+      walkoverScore: "formatMax", timeAvailable: 240, courtAssign: {}, koFormat: "same",
       deadRubbers: { groupStage: "playAll", knockout: "stopWhenDecided" },
       lineup: { mode: "fixed", onePerMeeting: true, crossDivision: "warn", reservesAnyDivision: true },
       meetingTemplate: []

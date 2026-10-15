@@ -22,6 +22,7 @@ A simple, self-contained matchmaking app for social **court sports** — badmint
 - **Undo** — deleting a match or a player, resetting, importing and starting a new session all offer an *Undo* button for a few seconds.
 - **Did You Know?** — automatically surfaces fun facts about the session (streaks, upsets, rivalries, and more).
 - **Sharing** — name your session and share the leaderboard as an **image** (`.png`), or as an **interactive** `.html` file the other person can open offline: switch ranking styles, browse match history and sortable match stats, and tap a name for that player's full card.
+- **Competition mode** — tap **🏆 Competition** in the header to run a fixed-pairs event: a step-by-step setup (divisions, pairs — typed, pasted as a list or picked from your roster — format, score format, standings and courts), then round robin, double round robin, groups + knockout (with an optional 3rd-place match) or a straight knockout. The Courts screen suggests the next match for each free court, scores are checked against the format (badminton points, tennis/padel games and tiebreaks — unusual scores only warn), and standings with tiebreakers update by themselves. Walkovers, retirements, withdrawals and late entries are handled, and correcting a result clears any later knockout result it affected, with Undo. Team competitions arrive in a later update.
 - **Backup / handover** — Export the entire session (roster, history, scores, and settings) to a JSON file and Import it on another device to continue from the exact same point.
 
 ## How to use
@@ -40,7 +41,7 @@ A simple, self-contained matchmaking app for social **court sports** — badmint
 
 ## Tech
 
-Plain HTML, CSS and JavaScript — no framework, no bundler, no build step needed to run it. `index.html` holds the markup and loads the stylesheets in `css/` and the scripts in `js/`. All data is stored locally in your browser via `localStorage`, always through one small storage layer (`js/core/store.js`), which keeps working in memory if the browser blocks storage. The version is shown in the footer, and stamped into anything you share or export. Adding `?selftest` to the URL runs the built-in test suite. Competition mode (fixed pairs and team events) is being built step by step; until it's ready, it only appears when the URL contains `?comp`, and switching to it never changes your social session.
+Plain HTML, CSS and JavaScript — no framework, no bundler, no build step needed to run it. `index.html` holds the markup and loads the stylesheets in `css/` and the scripts in `js/`. All data is stored locally in your browser via `localStorage`, always through one small storage layer (`js/core/store.js`), which keeps working in memory if the browser blocks storage. The version is shown in the footer, and stamped into anything you share or export. Adding `?selftest` to the URL runs the built-in test suite. Switching to Competition mode never changes your social session.
 
 Each release also attaches a single self-contained `CourtMixer-vX.Y.Z.html` built by `tools/build-single-file.py`, for running the app straight from a downloaded file.
 

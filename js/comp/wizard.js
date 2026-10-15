@@ -8,7 +8,12 @@ const Wizard = (function () {
   const STEPS = ["start", "basics", "type", "divisions", "teams", "entries", "template", "meetingWin",
                  "format", "scoring", "standings", "courts", "review"];
   const TEAMS_ONLY = { teams: true, template: true, meetingWin: true };
-  const PLACEHOLDER = { entries: 3, template: 4, meetingWin: 4, format: 3, scoring: 3, standings: 3, courts: 3 };
+  // Steps not built yet, per competition type (the phase that brings them).
+  const PLACEHOLDER = { pairs: {}, teams: { entries: 4, template: 4, meetingWin: 4 } };
+  function placeholderPhase(comp, id) { return (PLACEHOLDER[comp.kind] || {})[id] || 0; }
+  // Steps registered by other files (wizard-pairs.js): { body, validate, recommend, act, input, change }
+  const EXT = {};
+  function register(id, def) { EXT[id] = def; }
   // Which later steps an answer on this step can affect (§6.1 invalidation).
   const AFFECTS = {
     start: ["type", "divisions", "teams", "template", "format"],
@@ -43,6 +48,7 @@ const Wizard = (function () {
   // Errors block Next; they are strings-table keys.
   function validate(comp, id) {
     const errs = [];
+    if (EXT[id] && EXT[id].validate && !placeholderPhase(comp, id)) EXT[id].validate(comp).forEach(e => errs.push(e));
     if (id === "basics") {
       if (!String(comp.name || "").trim()) errs.push("wiz.err.name");
       if (!/^\d{4}-\d{2}-\d{2}$/.test(comp.dateISO || "")) errs.push("wiz.err.date");
@@ -84,6 +90,7 @@ const Wizard = (function () {
   function applyRecommended(comp, id) {
     if (id === "divisions" && comp.divisions.length === 0) CompModel.setDivisionCount(comp, CompModel.recommendedDivisionCount(comp.kind));
     if (id === "teams" && comp.teams.length < CompModel.MIN_TEAMS) CompModel.setTeamCount(comp, 4);
+    if (EXT[id] && EXT[id].recommend) EXT[id].recommend(comp);
   }
   // Fills every remaining step the user hasn't answered yet, then goes to Review. Steps the
   // user already visited keep their answers.
@@ -109,13 +116,20 @@ const Wizard = (function () {
   }
   function markReview(comp, ids) { ids.forEach(id => { comp.wizard.needsReview[id] = true; }); }
   function blockers(comp) { return visibleSteps(comp).filter(id => comp.wizard.needsReview[id]); }
+  // Steps whose answers don't validate (Review lists them and blocks Generate).
+  function invalidSteps(comp) { return visibleSteps(comp).filter(id => id !== "review" && validate(comp, id).length); }
+  // Built steps not yet available for this competition type.
+  function unbuilt(comp) { return visibleSteps(comp).filter(id => placeholderPhase(comp, id)); }
 
   /* ===== Rendering ===== */
   let comp = null;      // the competition being edited
   let host = null;      // container element
   let errors = [];      // validation errors shown on the current step
+  let single = null;    // settings mode: { step, onDone } shows one step with a Done button
 
   function stepName(id) { return t("step." + id); }
+  // The step whose controls are on screen (the settings step, or the wizard's current step).
+  function activeStep() { return single ? single.step : current(comp); }
 
   function optionList(group, options, selected) {
     return '<div class="wiz-options" role="radiogroup">' + options.map(function (o) {
@@ -201,31 +215,27 @@ const Wizard = (function () {
           "</div>";
       });
       return h + "</details>";
-    },
-    review: function () {
-      const card = (stepId, title, lines) => '<div class="wiz-card"><div class="wiz-card-head"><span>' + esc(title) + '</span><button type="button" class="wiz-link" data-act="jump" data-step="' + stepId + '">' + esc(t("review.edit")) + "</button></div>" +
-        lines.map(l => '<div class="wiz-card-line">' + esc(l) + "</div>").join("") + "</div>";
-      let h = "";
-      const blk = blockers(comp);
-      if (blk.length) h += '<div class="wiz-warn">' + esc(t("review.needsReview", { steps: blk.map(stepName).join(", ") })) + "</div>";
-      h += card("basics", stepName("basics"), [comp.name || t("comp.untitled"), comp.dateISO, comp.sport ? t("sport." + comp.sport) : "—"]);
-      h += card("type", stepName("type"), [t("type." + comp.kind)]);
-      h += card("divisions", stepName("divisions"), comp.divisions.map(d => d.name + " · " + t("cat." + d.category)));
-      if (comp.kind === "teams") h += card("teams", stepName("teams"), [comp.teams.map(tm => tm.name).join(", ")]);
-      const later = visibleSteps(comp).filter(id => PLACEHOLDER[id]).map(stepName).join(", ");
-      h += '<div class="wiz-card"><div class="wiz-card-head"><span>' + esc(t("review.later")) + '</span></div><div class="wiz-card-line">' + esc(later) + "</div></div>";
-      h += '<button type="button" class="primary wiz-generate" disabled>' + esc(t("review.generate")) + "</button>" +
-        '<div class="muted">' + esc(blk.length ? t("review.blocked") : t("review.generateLater")) + "</div>";
-      return h;
     }
   };
 
   function placeholderBody(id) {
-    return '<div class="wiz-placeholder">' + esc(t("wiz.placeholder", { phase: PLACEHOLDER[id] })) + "</div>";
+    return '<div class="wiz-placeholder">' + esc(t("wiz.placeholder", { phase: placeholderPhase(comp, id) })) + "</div>";
+  }
+  function bodyOf(id) {
+    if (placeholderPhase(comp, id)) return placeholderBody(id);
+    if (EXT[id] && EXT[id].body) return EXT[id].body(comp);
+    return BODY[id] ? BODY[id]() : placeholderBody(id);
   }
 
   function render() {
     if (!host || !comp) return;
+    if (single) {
+      host.innerHTML = '<div class="card wiz"><div class="wiz-progress-text">' + esc(t("settings.title", { name: stepName(single.step) })) + "</div>" +
+        '<div class="wiz-body">' + bodyOf(single.step) + "</div>" +
+        (errors.length ? '<div class="wiz-errors" role="alert">' + errors.map(k => "<div>" + esc(t(k)) + "</div>").join("") + "</div>" : "") +
+        '<div class="wiz-nav"><button type="button" class="secondary" data-act="singleCancel">' + esc(t("wiz.cancel")) + '</button><button type="button" class="primary" data-act="singleDone">' + esc(t("wiz.done")) + "</button></div></div>";
+      return;
+    }
     const id = current(comp), pos = position(comp, id), vis = visibleSteps(comp);
     const pct = Math.round(100 * pos.n / pos.total);
     let h = '<div class="card wiz">' +
@@ -234,7 +244,7 @@ const Wizard = (function () {
       '<span class="wiz-bar"><span style="width:' + pct + '%"></span></span></button>' +
       '<div class="muted wiz-why">' + esc(t("why." + id)) + "</div>";
     if (comp.wizard.needsReview[id]) h += '<div class="wiz-warn">' + esc(t("wiz.reviewThis")) + "</div>";
-    h += '<div class="wiz-body">' + (BODY[id] ? BODY[id]() : placeholderBody(id)) + "</div>";
+    h += '<div class="wiz-body">' + bodyOf(id) + "</div>";
     if (errors.length) h += '<div class="wiz-errors" role="alert">' + errors.map(k => "<div>" + esc(t(k)) + "</div>").join("") + "</div>";
     h += '<div class="wiz-nav">' +
       (pos.n > 1 ? '<button type="button" class="secondary" data-act="back">' + esc(t("wiz.back")) + "</button>" : "<span></span>") +
@@ -250,7 +260,7 @@ const Wizard = (function () {
 
   // Runs a change that may affect later answers: confirm first if any visited step depends on it.
   function change(stepId, apply) {
-    const hit = affected(comp, stepId);
+    const hit = single ? [] : affected(comp, stepId);
     if (!hit.length) { apply(); rerender(); return; }
     cmxConfirm({ title: t("wiz.invalidate.title"), yes: t("wiz.invalidate.yes"),
       message: t("wiz.invalidate", { steps: hit.map(stepName).join(", ") }) },
@@ -276,8 +286,17 @@ const Wizard = (function () {
 
   function onClick(e) {
     const el = e.target.closest("[data-act]");
-    if (!el || !host.contains(el) || el.disabled) return;
+    if (!el || !host.contains(el) || el.disabled || !host.querySelector(".wiz")) return;
     const act = el.dataset.act;
+    if (act === "singleDone") {
+      errors = validate(comp, single.step);
+      if (errors.length) return render();
+      const s = single; const r = s.onDone(comp);
+      if (r && r.length) { errors = r; return render(); }
+      single = null; persist(); if (typeof CompShell !== "undefined") CompShell.render();
+      return;
+    }
+    if (act === "singleCancel") { const s = single; single = null; if (s.onCancel) s.onCancel(); return; }
     if (act === "next") { errors = next(comp); rerender(); if (!errors.length) scrollTop(); }
     else if (act === "back") { errors = []; back(comp); rerender(); scrollTop(); }
     else if (act === "useRecommended") { errors = useRecommended(comp); rerender(); if (!errors.length) scrollTop(); }
@@ -293,6 +312,7 @@ const Wizard = (function () {
     }
     else if (act === "teamColor") { comp.teams[Number(el.dataset.idx)].color = el.dataset.value || null; rerender(); }
     else if (act === "pick") pick(el.dataset.group, el.dataset.value);
+    else { const ext = EXT[activeStep()]; if (ext && ext.act) ext.act(comp, act, el); }
   }
 
   function pick(group, value) {
@@ -308,26 +328,33 @@ const Wizard = (function () {
       CompStore.flush();
       if (typeof CompShell !== "undefined") CompShell.render();
     }
-    else if (group === "sport") { if (value !== comp.sport) change("basics", () => { comp.sport = value; }); }
+    else if (group === "sport") { if (value !== comp.sport) change("basics", () => { comp.sport = value; if (!comp.wizard.visited.scoring && EXT.scoring && EXT.scoring.recommend) { comp.settings.matchFormats = {}; EXT.scoring.recommend(comp); } }); }
     else if (group === "kind") { if (value !== comp.kind) change("type", () => { comp.kind = value; if (value === "teams" && comp.teams.length < CompModel.MIN_TEAMS && !comp.wizard.visited.teams) CompModel.setTeamCount(comp, 4); }); }
     else if (group === "naming") { CompModel.renameDivisions(comp, value); rerender(); }
+    else { const ext = EXT[activeStep()]; if (ext && ext.act) ext.act(comp, "pick", null, group, value); }
   }
 
   // Text and select fields save as you type, without re-rendering (keeps the keyboard open).
   function onInput(e) {
     const el = e.target, f = el.dataset && el.dataset.field;
-    if (!f) return;
+    if (!f || !host.querySelector(".wiz")) return;
     const i = Number(el.dataset.idx);
     if (f === "name") comp.name = el.value;
     else if (f === "dateISO") comp.dateISO = el.value;
     else if (f === "divName") { comp.divisions[i].name = el.value; if (comp.settings.divisionNaming !== "custom") comp.settings.divisionNaming = "custom"; }
     else if (f === "teamName") comp.teams[i].name = el.value;
-    else return;
+    else { const ext = EXT[activeStep()]; if (!ext || !ext.input || ext.input(comp, f, el) === false) return; }
     persist();
     if (typeof CompShell !== "undefined") CompShell.renderBand();
   }
   function onChange(e) {
     const el = e.target;
+    if (!host.querySelector(".wiz")) return;
+    if (el.dataset && el.dataset.field && el.dataset.field !== "divCategory") {
+      const ext = EXT[activeStep()];
+      if (ext && ext.change) ext.change(comp, el.dataset.field, el);
+      return;
+    }
     if (!el.dataset || el.dataset.field !== "divCategory") return;
     const i = Number(el.dataset.idx), v = el.value;
     if (CompModel.CATEGORIES.indexOf(v) === -1) return;
@@ -335,18 +362,22 @@ const Wizard = (function () {
     render(); // reverts the select if the change was cancelled
   }
 
-  function mount(el, c) {
+  function mount(el, c, opts) {
     host = el; comp = c; errors = [];
+    single = opts && opts.single ? { step: opts.single, onDone: opts.onDone, onCancel: opts.onCancel } : null;
     if (!el._wizBound) {
       el.addEventListener("click", onClick);
       el.addEventListener("input", onInput);
       el.addEventListener("change", onChange);
       el._wizBound = true;
     }
-    if (!comp.wizard.visited[current(comp)]) arrive(comp, current(comp));
+    if (!single && !comp.wizard.visited[current(comp)]) arrive(comp, current(comp));
     render();
   }
 
+  function editing() { return comp; }
+  function isSingle() { return !!single; }
   return { STEPS, mount, render, visibleSteps, position, current, furthest, canJump, validate, next, back, jump,
-    useRecommended, affected, markReview, blockers };
+    useRecommended, affected, markReview, blockers, invalidSteps, unbuilt, register, applyRecommended,
+    ui: { optionList, stepper, field, change: (stepId, fn) => change(stepId, fn), rerender: () => rerender(), render: () => render(), stepName, editing, isSingle } };
 })();
