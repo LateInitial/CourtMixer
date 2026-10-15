@@ -260,8 +260,7 @@ const CompShell = (function () {
       comp.divisions.map(d => d.name + " (" + comp.entries.filter(e => e.divisionId === d.id && !e.withdrawn).length + ")").join(", "),
       s.formatPlan === "perDivision" ? comp.divisions.map(d => d.name + ": " + plan(sp[d.id] || sp.all)).join("; ") : plan(sp.all),
       fs.main ? CompFormat.describe(fs.main) : "", fs.ko ? t("review.koFormat", { f: CompFormat.describe(fs.ko) }) : "",
-      t("review.courts", { n: s.courtsCount, mode: t("courts." + (s.courtMode === "homeBorrow" ? "home" : s.courtMode)) }),
-      t("review.minutes", { n: s.minutesPerMatch || CompSchedule.minutesDefault(comp), c: s.changeoverMinutes })].filter(Boolean);
+      t("review.courts", { n: s.courtsCount, mode: t("courts." + (s.courtMode === "homeBorrow" ? "home" : s.courtMode)) })].filter(Boolean);
     cmxShowModal({ title: t("menu.summary"), bodyHTML: lines.map(l => '<p class="cmx-modal-text">' + esc(l) + "</p>").join(""), buttons: [{ label: t("wiz.close"), cls: "ghost", onClick: function () {} }] });
   }
 

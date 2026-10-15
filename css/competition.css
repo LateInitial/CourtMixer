@@ -124,7 +124,8 @@
 .wiz-roster { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
 .wiz-preview { padding: 10px 12px; border-radius: 10px; background: #f5f8ff; border: 1px solid #e3e9fb; font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
 .wiz-builder { display: grid; gap: 8px; padding: 10px; border-radius: 12px; border: 1px dashed #c8d5fb; }
-.wiz-adv[open] { display: grid; gap: 8px; }
+.wiz-adv > :not(summary) { margin-top: 8px; }
+.wiz-adv > button { display: block; }
 
 /* ===== Courts tab ===== */
 .comp-courts { display: grid; gap: 10px; }

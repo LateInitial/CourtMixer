@@ -169,7 +169,7 @@ const CompGenerate = (function () {
     const plan = planFor(comp, division), fids = formatIds(comp);
     const stages = [], meetings = [];
     if (entries.length < 2) return { stages, meetings, matches: [] };
-    const baseKey = division.id;
+    const baseKey = division.id + (division.drawSeq ? ":" + division.drawSeq : ""); // Redraw bumps drawSeq
 
     if (plan.type === "roundRobin" || plan.type === "doubleRoundRobin") {
       const st = newStage(division.id, plan.type, 0, { manualOrder: {} }, fids.main);

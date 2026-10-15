@@ -141,6 +141,7 @@ const CompScore = (function () {
     const nameA = D.sideLabel(m, "A"), nameB = D.sideLabel(m, "B");
     let h = '<div class="cmx-modal-head"><span class="cmx-modal-title">' + esc((court ? court.name + " · " : "") + D.meetingLabel(m, false)) + '</span><button type="button" class="cmx-modal-x" data-act="close" aria-label="' + esc(t("wiz.close")) + '">×</button></div>' +
       '<div class="muted">' + esc(CompFormat.describe(f)) + "</div>";
+    if (state.mode === "walkover") h += '<div class="muted">' + esc(t("score.wo.what")) + "</div>";
     if (state.mode !== "normal") {
       h += '<div class="wiz-label">' + esc(t(state.mode === "walkover" ? "score.woWho" : "score.retWho")) + "</div>" +
         '<div class="comp-actions">' + ["A", "B"].map(sd => '<button type="button" class="wiz-chip ' + (state.side === sd ? "on" : "") + '" data-act="side" data-side="' + sd + '">' + esc(sd === "A" ? nameA : nameB) + "</button>").join("") + "</div>";

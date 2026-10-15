@@ -96,11 +96,12 @@ const CompSchedule = (function () {
   }
 
   /* ===== Time estimate (§9.9) ===== */
-  // Greedy simulation: courts are servers; each match takes minutes + changeover; matches go in
+  // Greedy simulation: courts are servers; each match takes the format's typical minutes; matches go in
   // the default order, after the matches they depend on, never with a player on two courts.
   function estimate(comp, draw) {
     const s = comp.settings;
-    const per = (s.minutesPerMatch || minutesDefault(comp)) + (s.changeoverMinutes || 0);
+    // Minutes come from the score format (typical length incl. getting on and off court).
+    const per = minutesDefault(comp);
     const courts = Math.max(1, s.courtsCount || 1);
     const meetings = {}, matchOf = {};
     draw.meetings.forEach(m => { meetings[m.id] = m; });
@@ -152,7 +153,7 @@ const CompSchedule = (function () {
       makespan = Math.max(makespan, fin);
       remaining.splice(remaining.indexOf(pick), 1);
     }
-    const minutes = Math.max(0, makespan - (s.changeoverMinutes || 0));
+    const minutes = Math.max(0, makespan);
     return { minutes: Math.round(minutes / 5) * 5, matches: draw.matches.length, complete: remaining.length === 0 };
   }
 

@@ -11,8 +11,8 @@ const CompFormat = (function () {
   // §7.3. The first preset of each sport is the recommended one.
   const PRESETS = {
     badminton: [
-      mk({ id: "bad3x21", sport: "badminton", sets: 3, setType: "points", target: 21, winBy: 2, cap: 30, minutes: 35 }),
       mk({ id: "bad1x21", sport: "badminton", sets: 1, setType: "points", target: 21, winBy: 2, cap: 30, minutes: 15 }),
+      mk({ id: "bad3x21", sport: "badminton", sets: 3, setType: "points", target: 21, winBy: 2, cap: 30, minutes: 35 }),
       mk({ id: "bad3x15", sport: "badminton", sets: 3, setType: "points", target: 15, winBy: 2, cap: 21, minutes: 25 }),
       mk({ id: "bad1x30", sport: "badminton", sets: 1, setType: "points", target: 30, winBy: 2, cap: null, minutes: 22 }),
       mk({ id: "bad1x25", sport: "badminton", sets: 1, setType: "points", target: 25, winBy: 2, cap: null, minutes: 18 })

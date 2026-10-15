@@ -50,7 +50,7 @@ const CompModel = (function () {
     return {
       preset: null, divisionNaming: "letters",
       courtsCount: 2, courtNames: ["Court 1", "Court 2"], courtMode: "shared",
-      minutesPerMatch: null, changeoverMinutes: 3, startTime: null, restRule: "prefer", minRestMatches: 1,
+      minutesPerMatch: null, changeoverMinutes: 0, startTime: null, restRule: "prefer", minRestMatches: 1,
       formatPlan: "sameForAll",
       stagePlan: { all: { type: "groups", groupSize: 4, advance: 2, thirdPlace: true, seeding: "snake" } },
       matchFormats: {},

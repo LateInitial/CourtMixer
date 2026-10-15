@@ -104,7 +104,8 @@ const CompUI = (function () {
   }
   function moreMenu(comp, matchId) {
     const idle = comp.courts.filter(c => c.active && !comp.matches.some(m => m.status === "onCourt" && m.courtId === c.id));
-    const buttons = [{ label: t("courts.sendBack"), cls: "secondary", onClick: function () { sendBack(comp, matchId); } }];
+    const buttons = [{ label: t("courts.subOnce"), cls: "secondary", onClick: function () { substituteOnce(comp, matchId); } },
+      { label: t("courts.sendBack"), cls: "secondary", onClick: function () { sendBack(comp, matchId); } }];
     idle.forEach(c => buttons.push({ label: t("courts.moveTo", { court: c.name }), cls: "secondary", onClick: function () {
       const x = comp.matches.find(m => m.id === matchId); if (x) { x.courtId = c.id; CompStore.save(comp); CompShell.render(); } } }));
     buttons.push({ label: t("wiz.close"), cls: "ghost", onClick: function () {} });
@@ -239,7 +240,7 @@ const CompUI = (function () {
     if (!done.length) h += '<div class="card muted">' + esc(t("results.none")) + "</div>";
     done.forEach(function (x) {
       const m = D.meetingById[x.meetingId];
-      const side = (sd) => '<div class="res-side' + (x.winner === sd ? " win" : "") + '">' + esc(D.sideLabel(m, sd)) + "</div>";
+      const side = (sd) => '<div class="res-side' + (x.winner === sd ? " win" : "") + '">' + esc(playerNames(comp, D.playerIdsOf(x, sd)) || D.sideLabel(m, sd)) + "</div>";
       h += '<button type="button" class="card res-card" data-act="editResult" data-id="' + x.id + '"><div class="muted">' + esc(divName(D, x.divisionId) + " · " + D.meetingLabel(m, false)) + "</div>" +
         side("A") + side("B") + '<div class="res-sets">' + esc(setsText(x)) + (x.editedAt ? ' <span class="muted">' + esc(t("results.edited")) + "</span>" : "") + "</div></button>";
     });
@@ -254,13 +255,17 @@ const CompUI = (function () {
     let h = "";
     if (comp.divisions.length > 1) h += seg("entDiv", comp.divisions.map(d => ({ value: d.id, label: d.name })), ui.entDiv);
     const list = comp.entries.filter(e => e.divisionId === ui.entDiv);
-    const hasResults = comp.matches.some(x => x.divisionId === ui.entDiv && x.status === "done");
+    const started = divisionStarted(comp, ui.entDiv);
+    const genders = (e) => e.playerIds.map(id => (comp.players.find(p => p.id === id) || {}).gender || "M").join("/");
     h += '<div class="card"><div class="wiz-list">' + list.map(e => '<div class="wiz-pair' + (e.withdrawn ? " withdrawn" : "") + '"><span class="wiz-pair-name"><button type="button" class="st-link" data-act="entry" data-id="' + esc(e.id) + '">' + esc(e.label) + "</button>" +
+      ' <span class="muted">' + esc(genders(e)) + "</span>" +
       (e.withdrawn ? ' <span class="wiz-rec amber">' + esc(t("entries.withdrawn")) + "</span>" : "") + (e.seed ? ' <span class="muted">' + esc(t("entries.seedN", { n: e.seed })) + "</span>" : "") + "</span>" +
-      (e.withdrawn ? "" : '<button type="button" class="secondary small" data-act="withdraw" data-id="' + esc(e.id) + '">' + esc(t("entries.withdraw")) + "</button>") + "</div>").join("") + "</div>";
-    if (!hasResults) h += '<button type="button" class="secondary" data-act="lateEntry">' + esc(t("entries.late")) + "</button>";
+      (e.withdrawn ? "" : '<button type="button" class="wiz-icon" data-act="fixPair" data-id="' + esc(e.id) + '" aria-label="' + esc(t("entries.fix")) + '">\u270e</button>' +
+        '<button type="button" class="secondary small" data-act="pairMenu" data-id="' + esc(e.id) + '">' + esc(t("entries.change")) + "</button>") + "</div>").join("") + "</div>";
+    if (!started) h += '<div class="comp-actions"><button type="button" class="secondary" data-act="lateEntry">' + esc(t("entries.late")) + "</button>" +
+      '<button type="button" class="secondary" data-act="redraw">' + esc(t("entries.redraw")) + "</button></div>";
     else h += '<div class="muted">' + esc(t("entries.lateClosed")) + "</div>";
-    h += "</div>";
+    h += '<div class="muted">' + esc(t("entries.help")) + "</div></div>";
     root.innerHTML = h;
   }
 
@@ -288,20 +293,113 @@ const CompUI = (function () {
       { label: t("wiz.close"), cls: "ghost", onClick: function () {} }] });
   }
 
+  // A started (on court) or finished match locks a division's draw.
+  function divisionStarted(comp, divId) { return comp.matches.some(x => x.divisionId === divId && (x.status === "done" || x.status === "onCourt")); }
+  function categoryGenders(comp, divId) { const d = comp.divisions.find(x => x.id === divId); return d && d.category === "WD" ? ["F", "F"] : d && d.category === "XD" ? ["M", "F"] : ["M", "M"]; }
+  function labelOf(comp, e) { return e.playerIds.map(id => (comp.players.find(p => p.id === id) || {}).name || "?").join(" / "); }
+
+  // Name + M/F rows in the shared modal. onSave(names, genders) returns false to keep it open.
+  function peopleDialog(title, hint, names, genders, saveLabel, onSave) {
+    const g = genders.slice();
+    const rows = names.map((n, i) => '<div class="wiz-item"><input type="text" class="wiz-input" maxlength="40" data-i="' + i + '" value="' + esc(n || "") + '" placeholder="' + esc(t("entries.player", { n: i + 1 })) + '">' +
+      '<span class="gender-toggle wiz-g">' + ["M", "F"].map(x => '<button type="button" class="gender-seg' + (g[i] === x ? " active" : "") + '" data-gi="' + i + '" data-g="' + x + '">' + x + "</button>").join("") + "</span></div>").join("");
+    cmxShowModal({ title: title, bodyHTML: (hint ? '<p class="cmx-modal-text">' + esc(hint) + "</p>" : "") + '<div class="wiz-list">' + rows + "</div>",
+      onOpen: function (box) {
+        box.querySelectorAll("[data-gi]").forEach(b => { b.onclick = function () {
+          g[Number(b.dataset.gi)] = b.dataset.g;
+          box.querySelectorAll('[data-gi="' + b.dataset.gi + '"]').forEach(x => x.classList.toggle("active", x === b));
+        }; });
+        const f = box.querySelector("input[data-i]"); if (f) f.focus();
+      },
+      buttons: [{ label: saveLabel, cls: "primary", onClick: function (box) {
+        const n = names.map((x, i) => box.querySelector('input[data-i="' + i + '"]').value.trim());
+        if (n.some(x => !x)) return false;
+        return onSave(n, g);
+      } }, { label: t("wiz.cancel"), cls: "ghost", onClick: function () {} }] });
+  }
+
   function lateEntry(comp) {
     const divId = ui.entDiv;
-    cmxShowModal({ title: t("entries.late"), bodyHTML: '<p class="cmx-modal-text">' + esc(t("entries.late.hint")) + "</p>" +
-      '<input class="wiz-input" id="lateA" placeholder="' + esc(t("entries.player", { n: 1 })) + '"><input class="wiz-input" id="lateB" placeholder="' + esc(t("entries.player", { n: 2 })) + '" style="margin-top:6px">',
-      buttons: [{ label: t("entries.add"), cls: "primary", onClick: function (box) {
-        const a = box.querySelector("#lateA").value.trim(), b = box.querySelector("#lateB").value.trim();
-        if (!a || !b) return false;
-        CompShell.snapshot(t("entries.late"), comp);
-        const d = comp.divisions.find(x => x.id === divId);
-        Wizard.pairsUtil.addPair(comp, divId, [a, b], Wizard.pairsUtil && d ? (d.category === "WD" ? ["F", "F"] : d.category === "XD" ? ["M", "F"] : ["M", "M"]) : ["M", "M"]);
-        regenerateDivision(comp, divId);
+    if (divisionStarted(comp, divId)) return;
+    peopleDialog(t("entries.late"), t("entries.late.hint"), ["", ""], categoryGenders(comp, divId), t("entries.add"), function (names, g) {
+      CompShell.snapshot(t("entries.late"), comp);
+      Wizard.pairsUtil.addPair(comp, divId, names, g);
+      regenerateDivision(comp, divId);
+      CompStore.save(comp); CompShell.render();
+      showToast(esc(t("entries.late.done")));
+    });
+  }
+  // Corrects names/genders everywhere, including matches already played (a typo, not a substitution).
+  function fixPair(comp, entryId) {
+    const e = comp.entries.find(x => x.id === entryId);
+    if (!e) return;
+    const ps = e.playerIds.map(id => comp.players.find(p => p.id === id) || {});
+    peopleDialog(t("entries.fix"), t("entries.fix.hint"), ps.map(p => p.name), ps.map(p => p.gender === "F" ? "F" : "M"), t("wiz.done"), function (names, g) {
+      ps.forEach((p, i) => { p.name = names[i]; p.gender = g[i]; });
+      e.label = labelOf(comp, e);
+      CompStore.save(comp); CompShell.render();
+    });
+  }
+  function newPlayer(comp, divId, name, gender, role, subFor) {
+    const p = { id: uid(), name: name, gender: gender === "F" ? "F" : "M", teamId: null, divisionId: divId, role: role, withdrawn: false, subFor: subFor || null };
+    comp.players.push(p);
+    return p;
+  }
+  // From now on: the pair keeps its place, results and standings; later matches use the new player.
+  function substitute(comp, entryId) {
+    const e = comp.entries.find(x => x.id === entryId);
+    if (!e) return;
+    const ps = e.playerIds.map(id => comp.players.find(p => p.id === id) || {});
+    cmxShowModal({ title: t("entries.sub"), bodyHTML: cmxMsgHtml(t("entries.sub.who")), buttons: ps.map((p, i) => ({ label: p.name, cls: "secondary", onClick: function () {
+      peopleDialog(t("entries.sub.new", { name: p.name }), t("entries.sub.hint"), [""], [p.gender === "F" ? "F" : "M"], t("entries.sub.save"), function (names, g) {
+        CompShell.snapshot(t("entries.sub"), comp);
+        const np = newPlayer(comp, e.divisionId, names[0], g[0], "regular", p.id);
+        p.replacedBy = np.id;
+        e.playerIds[i] = np.id;
+        e.label = labelOf(comp, e);
+        comp.log.push({ at: Date.now(), action: "substitute", entryId: e.id, out: p.id, in: np.id });
         CompStore.save(comp); CompShell.render();
-        showToast(esc(t("entries.late.done")));
-      } }, { label: t("wiz.close"), cls: "ghost", onClick: function () {} }] });
+        CompShell.toastUndo(esc(t("entries.sub.done", { out: p.name, inn: np.name })));
+      });
+    } })).concat([{ label: t("wiz.cancel"), cls: "ghost", onClick: function () {} }]) });
+  }
+  // This match only (e.g. an injury mid-session); the pair's own players stay unchanged.
+  function substituteOnce(comp, matchId) {
+    const x = comp.matches.find(m => m.id === matchId);
+    if (!x) return;
+    const D = D_(comp);
+    const opts = [];
+    ["A", "B"].forEach(sd => D.playerIdsOf(x, sd).forEach((pid, i) => opts.push({ sd, i, p: comp.players.find(p => p.id === pid) || { name: "?" } })));
+    cmxShowModal({ title: t("courts.subOnce"), bodyHTML: cmxMsgHtml(t("entries.sub.who")), buttons: opts.map(o => ({ label: o.p.name, cls: "secondary", onClick: function () {
+      peopleDialog(t("entries.sub.new", { name: o.p.name }), t("courts.subOnce.hint"), [""], [o.p.gender === "F" ? "F" : "M"], t("entries.sub.save"), function (names, g) {
+        CompShell.snapshot(t("courts.subOnce"), comp);
+        const np = newPlayer(comp, x.divisionId, names[0], g[0], "reserve", o.p.id);
+        const side = o.sd === "A" ? x.sideA : x.sideB;
+        if (!side.playerIds.length) side.playerIds = D.playerIdsOf(x, o.sd);
+        side.playerIds[o.i] = np.id;
+        CompStore.save(comp); CompShell.render();
+        CompShell.toastUndo(esc(t("entries.sub.done", { out: o.p.name, inn: np.name })));
+      });
+    } })).concat([{ label: t("wiz.cancel"), cls: "ghost", onClick: function () {} }]) });
+  }
+  function pairMenu(comp, entryId) {
+    const e = comp.entries.find(x => x.id === entryId);
+    if (!e) return;
+    cmxShowModal({ title: e.label, bodyHTML: "", buttons: [
+      { label: t("entries.sub"), cls: "secondary", onClick: function () { substitute(comp, entryId); } },
+      { label: t("entries.withdraw"), cls: "secondary", onClick: function () { withdraw(comp, entryId); } },
+      { label: t("wiz.close"), cls: "ghost", onClick: function () {} }] });
+  }
+  function redraw(comp) {
+    const divId = ui.entDiv, d = comp.divisions.find(x => x.id === divId);
+    if (!d || divisionStarted(comp, divId)) return;
+    cmxConfirm({ title: t("entries.redraw"), yes: t("entries.redraw"), message: t("entries.redraw.q", { div: d.name }) }, function () {
+      CompShell.snapshot(t("entries.redraw"), comp);
+      d.drawSeq = (d.drawSeq || 0) + 1;
+      regenerateDivision(comp, divId);
+      CompStore.save(comp); CompShell.render();
+      CompShell.toastUndo(esc(t("entries.redraw.done", { div: d.name })));
+    });
   }
   // Rebuilds one division's draw (only while it has no results).
   function regenerateDivision(comp, divId) {
@@ -337,6 +435,9 @@ const CompUI = (function () {
     else if (a === "resDiv") { ui.resDiv = v; CompShell.render(); }
     else if (a === "entDiv") { ui.entDiv = v; CompShell.render(); }
     else if (a === "withdraw") withdraw(comp, b.dataset.id);
+    else if (a === "fixPair") fixPair(comp, b.dataset.id);
+    else if (a === "pairMenu") pairMenu(comp, b.dataset.id);
+    else if (a === "redraw") redraw(comp);
     else if (a === "lateEntry") lateEntry(comp);
     else return false;
     return true;

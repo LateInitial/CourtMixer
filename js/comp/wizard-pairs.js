@@ -34,14 +34,24 @@
     comp.entries = comp.entries.filter(x => x.id !== id);
     comp.players = comp.players.filter(p => e.playerIds.indexOf(p.id) === -1);
   }
-  // "Ann / Ben", "Ann & Ben", "Ann, Ben", tab-separated. Returns [[a, b], ...] and bad lines.
+  // One pair per line: "Ann / Ben" ("&", a comma or a tab work too). Genders are optional, either
+  // after each name ("Ann f / Ben m") or at the end of the line ("Ann / Ben f / m", "Ann / Ben fm").
+  // Returns { pairs: [{ names: [a, b], genders: [g|null, g|null] }], bad: [lines] }.
   function parsePairs(text) {
     const pairs = [], bad = [];
     String(text || "").split(/\r?\n/).forEach(function (line) {
-      const s = line.trim();
+      let s = line.trim(), genders = [null, null];
       if (!s) return;
+      const tail = /^(.*?)\s+([mf])\s*(?:[\/,&]\s*|\s+)?([mf])\s*$/i.exec(s);
+      if (tail && tail[1].split(/\s*(?:\/|&|,|\t)\s*/).filter(Boolean).length === 2) { s = tail[1]; genders = [tail[2].toUpperCase(), tail[3].toUpperCase()]; }
       const parts = s.split(/\s*(?:\/|&|,|\t)\s*/).filter(Boolean);
-      if (parts.length === 2) pairs.push(parts); else bad.push(s);
+      if (parts.length !== 2) { bad.push(line.trim()); return; }
+      const names = parts.map(function (n, i) {
+        const m = /^(.*\S)\s+([mf])$/i.exec(n);
+        if (m && !genders[i]) { genders[i] = m[2].toUpperCase(); return m[1]; }
+        return n;
+      });
+      pairs.push({ names, genders });
     });
     return { pairs, bad };
   }
@@ -84,17 +94,15 @@
           '<button type="button" class="wiz-icon" data-act="editPair" data-id="' + esc(e.id) + '" aria-label="' + esc(t("entries.edit")) + '">✎</button>' +
           '<button type="button" class="wiz-icon" data-act="removePair" data-id="' + esc(e.id) + '" aria-label="' + esc(t("entries.remove")) + '">✕</button></div>';
       }).join("") + "</div>";
-      const gd = defaultGenders(d && d.category);
       const editing = ui.editId && comp.entries.find(e => e.id === ui.editId);
-      const nm = editing ? editing.playerIds.map(id => playerById(comp, id) || {}) : [{ name: "", gender: gd[0] }, { name: "", gender: gd[1] }];
-      ui.newG = ui.newG && !editing ? ui.newG : nm.map(p => p.gender || "M");
-      h += '<div class="wiz-addpair">' + [0, 1].map(i =>
-        '<div class="wiz-item"><input type="text" class="wiz-input" data-field="newName' + i + '" maxlength="40" placeholder="' + esc(t("entries.player", { n: i + 1 })) + '" value="' + esc(nm[i].name || "") + '">' +
-        '<span class="gender-toggle wiz-g">' + ["M", "F"].map(g => '<button type="button" class="gender-seg ' + (ui.newG[i] === g ? "active" : "") + '" data-act="newG" data-idx="' + i + '" data-value="' + g + '">' + g + "</button>").join("") + "</span></div>").join("") +
+      const dr = draft(comp, d);
+      h += '<div class="wiz-addpair">' + (editing ? '<div class="wiz-label">' + esc(t("entries.editing", { pair: editing.label })) + "</div>" : "") + [0, 1].map(i =>
+        '<div class="wiz-item"><input type="text" class="wiz-input" data-field="newName' + i + '" maxlength="40" placeholder="' + esc(t("entries.player", { n: i + 1 })) + '" value="' + esc(dr.names[i]) + '">' +
+        '<span class="gender-toggle wiz-g">' + ["M", "F"].map(g => '<button type="button" class="gender-seg ' + (dr.g[i] === g ? "active" : "") + '" data-act="newG" data-idx="' + i + '" data-value="' + g + '">' + g + "</button>").join("") + "</span></div>").join("") +
         '<button type="button" class="primary" data-act="addPair">' + esc(editing ? t("entries.save") : t("entries.add")) + "</button>" +
         (editing ? '<button type="button" class="wiz-link" data-act="cancelEdit">' + esc(t("entries.cancel")) + "</button>" : "") + "</div>";
       h += '<details class="wiz-adv"><summary>' + esc(t("entries.paste")) + '</summary><div class="muted">' + esc(t("entries.paste.hint")) + "</div>" +
-        '<textarea class="wiz-input wiz-text" data-field="pasteText" rows="5" placeholder="Rina / Sari\nBudi & Andi"></textarea>' +
+        '<textarea class="wiz-input wiz-text" data-field="pasteText" rows="5" placeholder="Rina f / Sari f\nBudi / Andi">' + esc(ui.pasteText || "") + "</textarea>" +
         '<button type="button" class="secondary" data-act="pastePairs">' + esc(t("entries.paste.add")) + "</button></details>";
       if (typeof players !== "undefined" && players.length) {
         h += '<details class="wiz-adv"' + (ui.picked.length ? " open" : "") + '><summary>' + esc(t("entries.roster")) + '</summary><div class="muted">' + esc(t("entries.roster.hint")) + '</div><div class="wiz-roster">' +
@@ -118,23 +126,22 @@
       return h;
     },
     act: function (comp, act, el) {
-      if (act === "entryDiv") { ui.entryDiv = el.dataset.value; ui.editId = null; ui.newG = null; U.render(); }
-      else if (act === "newG") { ui.newG[Number(el.dataset.idx)] = el.dataset.value; U.render(); keepNames(); }
+      if (act === "entryDiv") { ui.entryDiv = el.dataset.value; ui.editId = null; ui.draft = null; U.render(); }
+      else if (act === "newG") { draft(comp).g[Number(el.dataset.idx)] = el.dataset.value; U.render(); }
       else if (act === "addPair") {
-        const root = el.closest(".wiz");
-        const n0 = root.querySelector('[data-field="newName0"]').value.trim(), n1 = root.querySelector('[data-field="newName1"]').value.trim();
+        const dr = draft(comp), n0 = dr.names[0].trim(), n1 = dr.names[1].trim();
         if (!n0 || !n1) return cmxAlert(t("entries.needTwo"));
         const editing = ui.editId && comp.entries.find(e => e.id === ui.editId);
         if (editing) {
-          editing.playerIds.forEach((id, i) => { const p = playerById(comp, id); if (p) { p.name = i ? n1 : n0; p.gender = ui.newG[i]; } });
+          editing.playerIds.forEach((id, i) => { const p = playerById(comp, id); if (p) { p.name = i ? n1 : n0; p.gender = dr.g[i]; } });
           editing.label = labelOf(comp, editing);
-        } else addPair(comp, ui.entryDiv, [n0, n1], ui.newG);
-        ui.editId = null; ui.newG = null; typed = ["", ""];
+        } else addPair(comp, ui.entryDiv, [n0, n1], dr.g);
+        ui.editId = null; ui.draft = null;
         U.rerender();
         const f = document.querySelector('[data-field="newName0"]'); if (f && !editing) f.focus();
       }
-      else if (act === "editPair") { ui.editId = el.dataset.id; ui.newG = null; U.render(); }
-      else if (act === "cancelEdit") { ui.editId = null; ui.newG = null; U.render(); }
+      else if (act === "editPair") { ui.editId = el.dataset.id; ui.draft = null; U.render(); const f = document.querySelector('[data-field="newName0"]'); if (f) f.focus(); }
+      else if (act === "cancelEdit") { ui.editId = null; ui.draft = null; U.render(); }
       else if (act === "removePair") {
         const e = comp.entries.find(x => x.id === el.dataset.id);
         if (!e) return;
@@ -144,7 +151,8 @@
         const ta = el.closest(".wiz").querySelector('[data-field="pasteText"]');
         const r = parsePairs(ta && ta.value);
         const d = comp.divisions.find(x => x.id === ui.entryDiv), gd = defaultGenders(d && d.category);
-        r.pairs.forEach(p => addPair(comp, ui.entryDiv, p, gd));
+        r.pairs.forEach(p => addPair(comp, ui.entryDiv, p.names, p.genders.map((g, i) => g || gd[i])));
+        ui.pasteText = r.bad.join("\n");
         U.rerender();
         if (r.bad.length) cmxAlert(t("entries.paste.bad", { n: r.pairs.length, lines: r.bad.join("\n") }));
         else showToast(esc(t("entries.paste.done", { n: r.pairs.length })));
@@ -164,8 +172,8 @@
       }
     },
     input: function (comp, f, el) {
-      if (f === "newName0" || f === "newName1") { typed[f === "newName0" ? 0 : 1] = el.value; return false; }
-      if (f === "pasteText") return false;
+      if (f === "newName0" || f === "newName1") { draft(comp).names[f === "newName0" ? 0 : 1] = el.value; return false; }
+      if (f === "pasteText") { ui.pasteText = el.value; return false; }
       if (f === "seed") {
         const e = comp.entries.find(x => x.id === el.dataset.id), v = parseInt(el.value, 10);
         if (e) e.seed = v > 0 ? v : null;
@@ -182,10 +190,18 @@
       U.rerender();
     }
   });
-  // Typed-but-unsaved names survive a re-render (gender toggle taps).
-  let typed = ["", ""];
-  function keepNames() {
-    [0, 1].forEach(i => { const f = document.querySelector('[data-field="newName' + i + '"]'); if (f && typed[i] && !f.value) f.value = typed[i]; });
+  // The add/edit form's names and genders, kept while the step re-renders (gender taps etc.).
+  function draft(comp, d) {
+    if (ui.draft) return ui.draft;
+    const editing = ui.editId && comp.entries.find(e => e.id === ui.editId);
+    if (editing) {
+      const ps = editing.playerIds.map(id => playerById(comp, id) || {});
+      ui.draft = { names: ps.map(p => p.name || ""), g: ps.map(p => p.gender === "F" ? "F" : "M") };
+    } else {
+      d = d || comp.divisions.find(x => x.id === ui.entryDiv);
+      ui.draft = { names: ["", ""], g: defaultGenders(d && d.category) };
+    }
+    return ui.draft;
   }
 
   /* ===== Step 9: Format ===== */
@@ -314,7 +330,7 @@
       h += '<div class="wiz-label">' + esc(t("score.deuce")) + "</div>" + seg("deuce:" + slot, [{ value: "yes", label: t("yes") + " ★" }, { value: "no", label: t("no") }], f.winBy === 2 ? "yes" : "no");
       h += '<div class="wiz-label">' + esc(t("score.cap")) + "</div>" + seg("cap:" + slot, [{ value: "none", label: t("score.noCap") }, { value: "set", label: t("score.capAt") }], f.cap ? "set" : "none");
       if (f.cap) h += '<input type="number" min="1" max="99" class="wiz-input wiz-num" data-field="fmt:' + slot + ':cap" value="' + f.cap + '" aria-label="' + esc(t("score.cap")) + '">';
-      h += '<div class="wiz-label">' + esc(t("score.games")) + "</div>" + seg("bestOf:" + slot, [{ value: "3", label: t("score.bo3") + " ★" }, { value: "1", label: t("score.bo1") }, { value: "5", label: t("score.bo5") }], String(f.sets));
+      h += '<div class="wiz-label">' + esc(t("score.games")) + "</div>" + seg("bestOf:" + slot, [{ value: "1", label: t("score.bo1") + " ★" }, { value: "3", label: t("score.bo3") }, { value: "5", label: t("score.bo5") }], String(f.sets));
     } else {
       const presets = CompFormat.presetsFor(comp.sport || "other");
       const choice = f.id === "custom" || !CompFormat.findPreset(f.id) ? "custom" : f.id;
@@ -355,7 +371,7 @@
         h += '<div class="wiz-label">' + esc(t("score.koDifferent")) + "</div>" + seg("koFormat", [{ value: "same", label: t("no") + " ★" }, { value: "different", label: t("yes") }], comp.settings.koFormat || "same");
         if (comp.settings.koFormat === "different") h += '<div class="wiz-card">' + '<div class="wiz-card-head"><span>' + esc(t("score.koFormat")) + "</span></div>" + formatEditor(comp, "ko") + "</div>";
       }
-      h += '<div class="wiz-label">' + esc(t("score.walkover")) + "</div>" + U.optionList("walkover", [
+      h += '<div class="wiz-label">' + esc(t("score.walkover.title")) + '</div><div class="muted">' + esc(t("score.wo.what")) + "</div>" + U.optionList("walkover", [
         { value: "formatMax", label: t("score.wo.max"), desc: t("score.wo.max.desc", { ex: CompFormat.walkoverSets(ensureFormat(comp, "main")).map(s => s.a + "–" + s.b).join(" ") }), recommended: true },
         { value: "winOnly", label: t("score.wo.win"), desc: t("score.wo.win.desc") }], comp.settings.walkoverScore);
       return h;
@@ -380,7 +396,6 @@
       else if (key === "final") { f.finalSet = value === "full" ? "full" : "matchTiebreak"; f.matchTiebreakTo = value === "full" ? null : Number(value); f.id = "custom"; }
       else if (key === "noAd") { f.noAd = value === "yes"; f.id = "custom"; }
       CompFormat.finalize(comp.settings.matchFormats[slot] || f);
-      if (!comp.wizard.visited.courts) comp.settings.minutesPerMatch = null;
       U.rerender();
     },
     input: function () { return false; },
@@ -468,11 +483,7 @@
         h += comp.divisions.map(d => '<div class="wiz-colors"><span class="wiz-colors-name">' + esc(d.name) + "</span>" +
           s.courtNames.map((n, i) => '<button type="button" class="wiz-chip ' + onOff((s.courtAssign[d.id] || []).indexOf(i) !== -1) + '" data-act="assignCourt" data-div="' + esc(d.id) + '" data-idx="' + i + '">' + esc(n) + "</button>").join("") + "</div>").join("");
       }
-      const def = CompSchedule.minutesDefault(comp);
-      h += '<div class="wiz-row"><span class="wiz-label">' + esc(t("courts.minutes")) + "</span>" + U.stepper("minutes", s.minutesPerMatch || def, 5, 180) + "</div>" +
-        '<div class="muted">' + esc(s.minutesPerMatch ? t("courts.minutes.custom", { n: def }) : t("courts.minutes.fromFormat")) + "</div>" +
-        '<div class="wiz-row"><span class="wiz-label">' + esc(t("courts.changeover")) + "</span>" + U.stepper("changeover", s.changeoverMinutes, 0, 15) + "</div>" +
-        U.field(t("courts.startTime"), '<input type="time" class="wiz-input" data-field="startTime" value="' + esc(s.startTime || "") + '">');
+      h += U.field(t("courts.startTime"), '<input type="time" class="wiz-input" data-field="startTime" value="' + esc(s.startTime || "") + '">');
       h += '<div class="wiz-label">' + esc(t("courts.rest")) + "</div>" + U.optionList("restRule", [
         { value: "prefer", label: t("courts.rest.prefer"), desc: t("courts.rest.prefer.desc"), recommended: true },
         { value: "strict", label: t("courts.rest.strict"), desc: t("courts.rest.strict.desc") },
@@ -488,8 +499,6 @@
         const a = (s.courtAssign[el.dataset.div] = s.courtAssign[el.dataset.div] || []), i = Number(el.dataset.idx), at = a.indexOf(i);
         if (at === -1) a.push(i); else a.splice(at, 1);
       }
-      else if (act === "minutes") { const def = CompSchedule.minutesDefault(comp); s.minutesPerMatch = Math.max(5, Math.min(180, (s.minutesPerMatch || def) + 5 * Number(el.dataset.delta))); if (s.minutesPerMatch === def) s.minutesPerMatch = null; }
-      else if (act === "changeover") s.changeoverMinutes = Math.max(0, Math.min(15, s.changeoverMinutes + Number(el.dataset.delta)));
       else return;
       U.rerender();
     },
@@ -541,15 +550,14 @@
         h += reviewCard("scoring", name("scoring"), [fs.main ? CompFormat.describe(fs.main) : "—"].concat(fs.ko ? [t("review.koFormat", { f: CompFormat.describe(fs.ko) })] : []));
         const p = comp.settings.standings.pairs;
         h += reviewCard("standings", name("standings"), [t("stand." + p.rankBy), p.tiebreakers.map(tb => t("tb." + tb, { unit: t("unit.points") })).join(" › ")]);
-        h += reviewCard("courts", name("courts"), [t("review.courts", { n: comp.settings.courtsCount, mode: t("courts." + (comp.settings.courtMode === "homeBorrow" ? "home" : comp.settings.courtMode)) }),
-          t("review.minutes", { n: comp.settings.minutesPerMatch || CompSchedule.minutesDefault(comp), c: comp.settings.changeoverMinutes })]);
+        h += reviewCard("courts", name("courts"), [t("review.courts", { n: comp.settings.courtsCount, mode: t("courts." + (comp.settings.courtMode === "homeBorrow" ? "home" : comp.settings.courtMode)) })]);
         if (!bad.length) {
           const r = reviewNumbers(comp);
           const fin = CompSchedule.finishTime(comp.settings.startTime, r.est.minutes);
           h += '<div class="wiz-card"><div class="wiz-card-head"><span>' + esc(t("review.numbers")) + "</span></div>" +
             ['<div class="wiz-card-line">' + esc(t("review.matches", { n: r.draw.matches.length, m: r.draw.meetings.length })) + "</div>",
              '<div class="wiz-card-line">' + esc(t("review.perEntry", { min: r.min, max: r.max })) + "</div>",
-             '<div class="wiz-card-line">' + esc(t("review.duration", { time: CompSchedule.fmtDuration(r.est.minutes), courts: comp.settings.courtsCount })) + (fin ? " · " + esc(t("review.finish", { at: fin })) : "") + "</div>"].join("") + "</div>";
+             '<div class="wiz-card-line">' + esc(t("review.duration", { time: CompSchedule.fmtDuration(r.est.minutes), courts: comp.settings.courtsCount, per: CompSchedule.minutesDefault(comp) })) + (fin ? " · " + esc(t("review.finish", { at: fin })) : "") + "</div>"].join("") + "</div>";
           const budget = comp.settings.timeAvailable || 240;
           if (r.est.minutes > budget) {
             const alt = comp.settings.stagePlan.all && comp.settings.stagePlan.all.type !== "groups" ? reviewNumbersWith(comp, "groups") : null;
