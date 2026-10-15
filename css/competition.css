@@ -1,0 +1,105 @@
+/* CourtMixer - Competition mode (Phase 2, v1.10.0).
+   Amber = the existing notice palette (bg #fff7e6, border #f0d9a8, text #8d5f1f).
+   Rules: no horizontal scrolling, tap targets at least 40px, text never below 12px. */
+
+/* ===== Header chip ===== */
+.top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.top .brand-logo { min-width: 0; flex-shrink: 1; }
+.app-mode-chip {
+  flex-shrink: 0; min-height: 40px; padding: 8px 14px; border-radius: 999px;
+  background: transparent; color: #5f6d94; border: 1px solid #c8d5fb;
+  font-size: 13px; font-weight: 600; white-space: nowrap;
+}
+.app-mode-chip.on { background: #fff7e6; color: #8d5f1f; border-color: #f0d9a8; }
+
+/* ===== Mode switching: social views are only hidden, never altered ===== */
+.screen:not(.comp-mode) .comp-only { display: none !important; }
+.screen.comp-mode > .tabs:not(.comp-tabs),
+.screen.comp-mode > .view,
+.screen.comp-mode > .view.active { display: none; }
+
+/* ===== Amber band ===== */
+.comp-band {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  min-height: 40px; padding: 8px 14px; cursor: pointer;
+  background: #fff7e6; border-bottom: 1px solid #f0d9a8; color: #8d5f1f; font-size: 13px; line-height: 1.35;
+}
+.band-left { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.band-right { flex-shrink: 0; font-weight: 600; }
+.band-menu { flex-shrink: 0; font-size: 16px; }
+
+/* ===== Competition tabs (not .tab, so social tab code never touches them) ===== */
+.ctab { text-align: center; padding: 12px 6px; min-height: 40px; color: #6f7ca3; font-size: 14px; border: 0; border-radius: 0; background: transparent; cursor: pointer; font-weight: 500; }
+.ctab.active { color: #8d5f1f; border-bottom: 2px solid #b47714; font-weight: 700; }
+
+.comp-view { display: grid; gap: 12px; padding: 14px; min-width: 0; overflow-wrap: anywhere; }
+.comp-view button { min-height: 40px; }
+.comp-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.comp-list { display: grid; gap: 6px; }
+.comp-list-item { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; background: #f5f8ff; color: #1b2340; border: 1px solid #d8e3ff; }
+.comp-list-name { font-weight: 700; overflow-wrap: anywhere; }
+
+/* ===== Wizard ===== */
+.wiz { display: grid; gap: 12px; min-width: 0; }
+.wiz-progress { display: grid; gap: 6px; width: 100%; text-align: left; background: transparent; color: #1b2340; padding: 4px 0; }
+.wiz-progress-text { font-size: 15px; font-weight: 800; overflow-wrap: anywhere; }
+.wiz-bar { display: block; height: 6px; border-radius: 3px; background: #e8eeff; overflow: hidden; }
+.wiz-bar > span { display: block; height: 100%; background: var(--accent); border-radius: 3px; }
+.wiz-why { margin-top: -4px; }
+.wiz-body { display: grid; gap: 10px; min-width: 0; }
+.wiz-label { font-size: 13px; font-weight: 700; color: #1b2340; }
+.wiz-sub { font-size: 13px; font-weight: 700; color: #1b2340; margin-top: 4px; }
+.wiz-field { display: grid; gap: 4px; }
+.wiz-input, .wiz-select { width: 100%; min-width: 0; min-height: 40px; padding: 8px 10px; font-size: 16px; border: 1px solid #c8d5fb; border-radius: 10px; background: #fff; color: #1b2340; font-family: inherit; }
+.wiz-select { font-size: 14px; }
+.wiz-options { display: grid; gap: 6px; }
+.wiz-opt { display: grid; gap: 2px; width: 100%; text-align: left; background: #fff; color: #1b2340; border: 1px solid #d8e3ff; padding: 10px 12px; font-weight: 500; }
+.wiz-opt.on { border-color: var(--accent); background: #eef3ff; box-shadow: inset 0 0 0 1px var(--accent); }
+.wiz-opt:disabled { opacity: .55; cursor: default; }
+.wiz-opt-title { font-size: 14px; font-weight: 700; overflow-wrap: anywhere; }
+.wiz-opt-desc { font-size: 12px; color: var(--muted); line-height: 1.4; }
+.wiz-rec { display: inline-block; margin-left: 4px; padding: 1px 7px; border-radius: 999px; background: #e6f8ee; color: #1b7a4f; font-size: 12px; font-weight: 700; vertical-align: 1px; }
+.wiz-rec.amber { background: #fff7e6; color: #8d5f1f; border: 1px solid #f0d9a8; }
+.wiz-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.wiz-stepper { display: inline-flex; align-items: center; gap: 4px; }
+.wiz-step-btn { width: 40px; height: 40px; padding: 0; font-size: 20px; line-height: 1; background: #eef3ff; color: #4f6fff; border: 1px solid #c8d5fb; }
+.wiz-step-btn:disabled { opacity: .4; cursor: default; }
+.wiz-step-val { min-width: 32px; text-align: center; font-size: 18px; font-weight: 800; }
+.wiz-list { display: grid; gap: 6px; }
+.wiz-item { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.wiz-item .wiz-input { flex: 1 1 120px; }
+.wiz-item .wiz-select { flex: 1 1 140px; }
+.wiz-swatch { width: 14px; height: 40px; border-radius: 6px; flex-shrink: 0; border: 1px solid #d8e3ff; }
+.wiz-adv summary { cursor: pointer; font-size: 13px; font-weight: 700; color: #4f6fff; min-height: 40px; display: flex; align-items: center; }
+.wiz-colors { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 6px; }
+.wiz-colors-name { flex: 1 0 100%; font-size: 12px; font-weight: 700; overflow-wrap: anywhere; }
+.wiz-color { width: 40px; height: 40px; padding: 0; border-radius: 50%; border: 2px solid transparent; }
+.wiz-color.none { background: #fff; color: #5f6d94; border-color: #c8d5fb; font-size: 18px; }
+.wiz-color.on { border-color: #1b2340; box-shadow: 0 0 0 2px #fff inset; }
+.wiz-warn { padding: 9px 11px; border-radius: 10px; background: #fff7e6; border: 1px solid #f0d9a8; color: #8d5f1f; font-size: 13px; line-height: 1.45; }
+.wiz-errors { padding: 9px 11px; border-radius: 10px; background: #fde7e8; border: 1px solid #ef9ba0; color: #a3262c; font-size: 13px; line-height: 1.45; }
+.wiz-placeholder { padding: 12px; border-radius: 10px; background: #f5f8ff; border: 1px dashed #c8d5fb; color: #5f6d94; font-size: 13px; line-height: 1.5; }
+.wiz-nav { display: flex; justify-content: space-between; gap: 10px; }
+.wiz-nav button { flex: 1 1 0; max-width: 200px; }
+.wiz-link { background: transparent; color: #4f6fff; padding: 8px 4px; font-weight: 600; font-size: 13px; }
+.wiz-rest { justify-self: center; }
+.wiz-card { border: 1px solid #d8e3ff; border-radius: 12px; padding: 10px 12px; background: #fafcff; display: grid; gap: 3px; }
+.wiz-card-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-weight: 700; font-size: 14px; }
+.wiz-card-line { font-size: 13px; color: #42506f; overflow-wrap: anywhere; }
+.wiz-generate:disabled { opacity: .5; cursor: default; }
+
+/* step list (in the shared modal) */
+.wiz-steplist { display: grid; gap: 4px; }
+.wiz-steprow { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 40px; text-align: left; background: #fff; color: #1b2340; border: 1px solid #e3e9fb; font-weight: 500; font-size: 14px; }
+.wiz-steprow:disabled { color: #9aa5c4; cursor: default; }
+.wiz-stepicon { width: 18px; text-align: center; flex-shrink: 0; }
+.wiz-steprow.done .wiz-stepicon { color: #22a96e; }
+.wiz-steprow.current { border-color: var(--accent); font-weight: 700; }
+.wiz-steprow.current .wiz-stepicon { color: var(--accent); }
+.wiz-steprow.review .wiz-stepicon { color: #b47714; }
+
+@media (max-width: 520px) {
+  .comp-view { padding: 10px 8px; gap: 10px; }
+  .app-mode-chip { padding: 8px 10px; font-size: 12px; }
+  .ctab { font-size: 12px; padding: 10px 4px; }
+}

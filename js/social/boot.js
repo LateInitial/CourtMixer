@@ -189,5 +189,6 @@ renderMatch();
 renderHistory();
 renderLeaderboard();
 renderStats();
+CompShell.init();
 if (/[?#&]selftest/.test(location.search + location.hash)) runSelfTests();
 if (/[?#&]sharetest/.test(location.search + location.hash)) runShareDiagnostics();

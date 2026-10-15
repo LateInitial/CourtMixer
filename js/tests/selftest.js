@@ -262,6 +262,149 @@ function runSelfTests(){
     }
   }
 
+  // ===== Phase 2: competition shell =====
+  out.push("strings table");
+  eq("t() fills placeholders", t("wiz.stepOf", { n: 4, total: 10, name: "Divisions" }), "Step 4 of 10 — Divisions");
+  eq("t() returns the key when missing", t("no.such.key"), "no.such.key");
+  delete STR.missing["no.such.key"];
+
+  const SOCIAL_KEYS = ["courtmixer_players", "courtmixer_history", "courtmixer_seen", "courtmixer_court_count",
+    "courtmixer_scoring_style", "courtmixer_matchmaking", "courtmixer_session_name", "courtmixer_session_date",
+    "courtmixer_court_modes", "courtmixer_court_slots", "courtmixer_court_manual", "courtmixer_custom_defaults",
+    "courtmixer_ps_hint_seen"];
+  const _warned = _storageWarned;
+  const compRootHtml = (document.getElementById("compRoot") || {}).innerHTML;
+  const realMode = CompStore.getMode();
+  Store._useBackend(mockStorage());
+  CompStore._reset();
+  try {
+    out.push("competition model");
+    const c1 = CompModel.newCompetition();
+    CompModel.applyPreset(c1, CompModel.RECOMMENDED_PRESET);
+    eq("new competition starts in setup", c1.status, "setup");
+    eq("schema version stamped", c1.schemaVersion, CompModel.SCHEMA_VERSION);
+    eq("recommended preset: pairs", c1.kind, "pairs");
+    eq("recommended preset: 2 divisions", c1.divisions.map(d => d.name), ["A", "B"]);
+    eq("recommended preset: groups + knockout", c1.settings.stagePlan.all.type, "groups");
+    const tp = CompModel.newCompetition(); CompModel.applyPreset(tp, "teamsFlexible");
+    ok("team preset: 3 divisions, 4 teams, flexible lineup", tp.kind === "teams" && tp.divisions.length === 3 && tp.teams.length === 4 && tp.settings.lineup.mode === "flexible");
+    CompModel.renameDivisions(c1, "metals");
+    eq("naming quick-fill renames", c1.divisions.map(d => d.name), ["Gold", "Silver"]);
+    ok("migrate keeps a current document", CompModel.migrate(JSON.parse(JSON.stringify(c1))).id === c1.id);
+    eq("migrate leaves a newer document alone", CompModel.migrate({ schemaVersion: 99, id: "x" }).schemaVersion, 99);
+    c1.matches = [{ id: "m" }]; c1.status = "live";
+    const dup = CompModel.duplicate(c1);
+    ok("duplicate: new id, back to setup, results cleared, settings kept",
+      dup.id !== c1.id && dup.status === "setup" && dup.matches.length === 0 && dup.divisions.length === 2 && dup.settings.stagePlan.all.type === "groups");
+
+    out.push("wizard navigation");
+    const w = CompModel.newCompetition();
+    CompModel.applyPreset(w, CompModel.RECOMMENDED_PRESET);
+    w.wizard.visited.start = true;
+    eq("pairs: 10 visible steps", Wizard.visibleSteps(w).length, 10);
+    ok("pairs skip teams, template and meetingWin", ["teams", "template", "meetingWin"].every(id => Wizard.visibleSteps(w).indexOf(id) === -1));
+    eq("step 1 renumbered", Wizard.position(w, "start"), { n: 1, total: 10 });
+    eq("Next from start goes to basics", (Wizard.next(w), w.wizard.currentStep), "basics");
+    eq("basics blocks Next until name and sport are set", Wizard.next(w), ["wiz.err.name", "wiz.err.sport"]);
+    ok("cannot jump past the furthest step", !Wizard.canJump(w, "format"));
+    w.name = "Club Cup"; w.sport = "badminton";
+    eq("Next validates and moves on", (Wizard.next(w), w.wizard.currentStep), "type");
+    Wizard.next(w); // -> divisions
+    Wizard.back(w); Wizard.back(w);
+    ok("Back keeps the answers", w.wizard.currentStep === "basics" && w.name === "Club Cup" && w.sport === "badminton");
+    ok("can jump forward to a visited step", Wizard.jump(w, "divisions") && w.wizard.currentStep === "divisions");
+    w.kind = "teams";
+    eq("teams: 13 visible steps, divisions is step 4", [Wizard.visibleSteps(w).length, Wizard.position(w, "divisions").n], [13, 4]);
+    w.kind = "pairs";
+
+    out.push("wizard invalidation");
+    // entries and players in division B, then later steps visited
+    const divB = w.divisions[1].id;
+    w.players = [{ id: "pl1", name: "Rina", gender: "F", teamId: null, divisionId: divB, role: "regular", withdrawn: false }];
+    w.entries = [{ id: "e1", divisionId: divB, teamId: null, playerIds: ["pl1", "pl2"], label: "Rina / Sari", seed: null, withdrawn: false }];
+    w.wizard.visited.entries = true; w.wizard.visited.format = true;
+    eq("changing divisions affects visited Entries and Format", Wizard.affected(w, "divisions"), ["entries", "format"]);
+    CompModel.setDivisionCount(w, 1);
+    Wizard.markReview(w, Wizard.affected(w, "divisions"));
+    ok("dependent steps marked needsReview", w.wizard.needsReview.entries && w.wizard.needsReview.format);
+    ok("entries kept, moved to Unassigned", w.entries.length === 1 && w.entries[0].divisionId === null && w.players[0].divisionId === null);
+    eq("Unassigned bucket lists them", [CompModel.unassigned(w).players.length, CompModel.unassigned(w).entries.length], [1, 1]);
+    eq("Review is blocked while steps need review", Wizard.blockers(w), ["entries", "format"]);
+    Wizard.jump(w, "entries"); Wizard.next(w);
+    ok("Next on a flagged step clears its flag", !w.wizard.needsReview.entries);
+
+    out.push("use recommended for the rest");
+    const r = CompModel.newCompetition();
+    CompModel.applyPreset(r, "teamsFixed");
+    r.wizard.visited.start = true; r.name = "Team Battle"; r.sport = "padel";
+    Wizard.next(r); Wizard.next(r); Wizard.next(r); // start -> basics -> type -> divisions
+    eq("on step 4", r.wizard.currentStep, "divisions");
+    eq("use recommended succeeds", Wizard.useRecommended(r), []);
+    eq("lands on Review", r.wizard.currentStep, "review");
+    ok("every step marked visited", Wizard.visibleSteps(r).every(id => r.wizard.visited[id]));
+    ok("result is a valid competition (every step validates)", Wizard.visibleSteps(r).every(id => Wizard.validate(r, id).length === 0));
+
+    out.push("competition storage");
+    const s1 = CompModel.newCompetition({ name: "Draft" });
+    s1.wizard.currentStep = "divisions"; s1.wizard.visited.divisions = true;
+    CompStore.save(s1); CompStore.setActive(s1.id);
+    eq("writes are debounced", Store.get("courtmixer_comp_" + s1.id), null);
+    CompStore.flush();
+    ok("flush writes the document", !!Store.get("courtmixer_comp_" + s1.id));
+    eq("index entry written", Store.getJSON("courtmixer_comp_index", []).map(e => e.name), ["Draft"]);
+    CompStore._reset(); // simulates a reload
+    const back1 = CompStore.getActive();
+    ok("draft survives reload at the same step", !!back1 && back1.id === s1.id && back1.wizard.currentStep === "divisions");
+    const doc = JSON.parse(JSON.stringify(back1));
+    CompStore.remove(s1.id);
+    ok("remove deletes document, index entry and active id", !Store.get("courtmixer_comp_" + s1.id) && CompStore.list().length === 0 && CompStore.getActiveId() === null);
+    CompStore.restore(doc); CompStore.setActive(doc.id);
+    ok("restore (undo) brings it back", !!CompStore.getActive() && CompStore.list().length === 1);
+    ok("Docs sees the competition", Docs.list().indexOf("comp:" + doc.id) !== -1);
+
+    out.push("blocked storage");
+    _storageWarned = true; // suppress the one-time alert during the test
+    Store._useBackend(throwing);
+    CompStore._reset();
+    const b1 = CompModel.newCompetition({ name: "Offline" });
+    CompStore.save(b1); CompStore.setActive(b1.id); CompStore.flush();
+    ok("keeps working in memory when storage is blocked", CompStore.getActive() && CompStore.getActive().name === "Offline");
+
+    out.push("mode switch leaves social data alone");
+    const mock2 = mockStorage();
+    Store._useBackend(mock2);
+    CompStore._reset();
+    save(); saveCourts();
+    Store.set("courtmixer_custom_defaults", JSON.stringify([{ name: "X", gender: "M", skill: 5 }]));
+    Store.set("courtmixer_ps_hint_seen", "1");
+    const socialBefore = SOCIAL_KEYS.map(k => Store.get(k));
+    CompStore.setMode("competition");
+    const sc = CompModel.newCompetition(); CompModel.applyPreset(sc, "teamsFixed");
+    CompStore.save(sc); CompStore.setActive(sc.id); CompStore.flush();
+    CompShell.render();
+    CompStore.setMode("social");
+    CompShell.render();
+    eq("app mode stored", Store.get("courtmixer_app_mode"), "social");
+    eq("every social key byte-identical after Competition and back", SOCIAL_KEYS.filter((k, i) => Store.get(k) !== socialBefore[i]), []);
+
+    out.push("every wizard step renders with known strings");
+    const host = document.createElement("div");
+    [CompModel.newCompetition(), CompModel.newCompetition()].forEach(function (cmp, i) {
+      CompModel.applyPreset(cmp, i ? "teamsFixed" : "pairsGroupsKo");
+      Wizard.visibleSteps(cmp).forEach(id => { cmp.wizard.visited[id] = true; });
+      Wizard.visibleSteps(cmp).forEach(id => { cmp.wizard.currentStep = id; Wizard.mount(host, cmp); });
+    });
+    eq("no missing strings", Object.keys(STR.missing), []);
+  } finally {
+    Store._useBackend(_realBackend);
+    _storageWarned = _warned;
+    CompStore._reset();
+    if (CompStore.getMode() !== realMode) CompStore.setMode(realMode);
+    CompShell.render();
+    const cr = document.getElementById("compRoot");
+    if (cr && CompStore.getMode() !== "competition") cr.innerHTML = compRootHtml || "";
+  }
+
   const el = document.createElement("div");
   el.className = "selftest-out";
   el.textContent = "CourtMixer v" + APP_VERSION + " self-tests\n" + pass + " passed, " + fail + " failed\n\n" + out.join("\n") + "\n\n(tap to close)";
